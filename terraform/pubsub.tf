@@ -22,11 +22,6 @@ resource "google_pubsub_topic" "topic" {
   # Enable ordering on hot topics — prevents per-venue event reordering.
   # Consumers pick per-venue ordering keys in aegis_shared.pubsub.publish_json.
   message_retention_duration = "604800s" # 7d — buffer while BQ sink catches up
-
-  schema_settings {
-    schema   = null
-    encoding = "JSON"
-  }
 }
 
 resource "google_pubsub_topic" "dlq" {
