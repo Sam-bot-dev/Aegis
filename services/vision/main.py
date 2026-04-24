@@ -35,6 +35,7 @@ from aegis_shared.schemas import (
     VisionEvidence,
 )
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 
@@ -58,6 +59,16 @@ app = FastAPI(
     version="0.1.0",
     description="Multimodal Gemini-backed frame classifier.",
     lifespan=lifespan,
+)
+
+settings = get_settings()
+origins = settings.cors_allowed_origins
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True if origins != ["*"] else False,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 log = get_logger(__name__)
 

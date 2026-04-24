@@ -79,6 +79,7 @@ class Settings(BaseSettings):
     # ---------- Security ----------
     service_internal_secret: str = Field(default="change-me")
     webhook_signing_key: str | None = Field(default=None)
+    cors_allowed_origins: list[str] = Field(default=["*"])
 
     @property
     def is_local(self) -> bool:

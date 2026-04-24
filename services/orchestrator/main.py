@@ -44,6 +44,7 @@ from aegis_shared.schemas import (
     new_id,
 )
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from agents.dispatcher.agent import ResponderRecord
@@ -67,6 +68,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="Aegis Orchestrator", version="0.1.0", lifespan=lifespan)
+
+settings = get_settings()
+origins = settings.cors_allowed_origins
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True if origins != ["*"] else False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 # Initialise at import time so ``TestClient(app)`` without a context manager
 # still finds the agent. The agent is cheap to construct.
 app.state.agent = OrchestratorAgent()
