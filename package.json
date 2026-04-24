@@ -4,10 +4,9 @@
   "private": true,
   "description": "Aegis — Agentic safety platform for mass gatherings.",
   "scripts": {
-    "dev:staff": "npm --workspace apps/staff run dev",
-    "dev:dashboard": "npm --workspace apps/dashboard run dev",
-    "build:staff": "npm --workspace apps/staff run build",
-    "build:dashboard": "npm --workspace apps/dashboard run build",
-    "lint": "npm --workspace apps/staff run lint && npm --workspace apps/dashboard run lint"
+    "dev:staff": "cd apps/staff && npm run dev",
+    "dev:dashboard": "cd apps/dashboard && npm run dev",
+    "build:staff": "cd apps/staff && npm run build",
+    "build:dashboard": "cd apps/dashboard && npm run build"
   }
 }
