@@ -1,0 +1,4 @@
+# Copy to terraform.tfvars and fill in. Never commit the populated file.
+project_id = "aegis-gsc-2026"
+region     = "asia-south1"
+env        = "prod"

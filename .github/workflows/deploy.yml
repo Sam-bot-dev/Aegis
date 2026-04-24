@@ -1,0 +1,61 @@
+name: deploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "services/**"
+      - "firebase/**"
+      - "scripts/deploy.ps1"
+      - ".github/workflows/deploy.yml"
+
+jobs:
+  deploy-core-services:
+    if: ${{ secrets.GCP_PROJECT_ID != '' && secrets.GCP_WORKLOAD_IDENTITY_PROVIDER != '' && secrets.GCP_SERVICE_ACCOUNT != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      matrix:
+        service:
+          - ingest
+          - vision
+          - orchestrator
+          - dispatch
+    env:
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      GCP_REGION: asia-south1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      - name: Deploy ${{ matrix.service }}
+        run: |
+          gcloud run deploy aegis-${{ matrix.service }} \
+            --project "${GCP_PROJECT_ID}" \
+            --source "services/${{ matrix.service }}" \
+            --region "${GCP_REGION}" \
+            --allow-unauthenticated
+
+  missing-deploy-secrets:
+    if: ${{ !(secrets.GCP_PROJECT_ID != '' && secrets.GCP_WORKLOAD_IDENTITY_PROVIDER != '' && secrets.GCP_SERVICE_ACCOUNT != '') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Explain skip
+        run: |
+          echo "Skipping deploy workflow."
+          echo "Set GCP_PROJECT_ID, GCP_WORKLOAD_IDENTITY_PROVIDER, and GCP_SERVICE_ACCOUNT secrets to enable Cloud Run deploys."

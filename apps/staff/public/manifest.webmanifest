@@ -1,0 +1,17 @@
+{
+  "name": "Aegis Staff",
+  "short_name": "Aegis Staff",
+  "description": "Staff response surface for live Aegis incidents.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0A0E14",
+  "theme_color": "#0A0E14",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "128x128",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+steps:
+  - name: python:3.12-slim
+    id: python-quality
+    entrypoint: bash
+    args:
+      - -lc
+      - |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install ruff mypy pytest pytest-cov
+        ruff check .
+        ruff format --check .
+        mypy services agents
+        if find services -type f \( -name 'test_*.py' -o -name '*_test.py' \) | grep -q .; then
+          pytest --cov=services --cov-report=term-missing
+        else
+          echo "No Python tests found yet. Skipping pytest."
+        fi
+
+  - name: node:20
+    id: web-quality
+    entrypoint: bash
+    args:
+      - -lc
+      - |
+        npm install
+        npm run lint
+        npm run build:staff
+        npm run build:dashboard
+
+substitutions:
+  _REGION: asia-south1
+
+options:
+  logging: CLOUD_LOGGING_ONLY

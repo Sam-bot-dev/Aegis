@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://aegis.ai/schemas/perceptual_signal.json",
+  "title": "PerceptualSignal",
+  "description": "Output of the perception layer — one observation from Vision, Audio, or Fusion.",
+  "type": "object",
+  "required": ["signal_id", "venue_id", "zone_id", "modality", "detected_at", "confidence"],
+  "properties": {
+    "signal_id":      { "type": "string", "pattern": "^SIG-" },
+    "venue_id":       { "type": "string" },
+    "zone_id":        { "type": "string" },
+    "modality":       { "type": "string", "enum": ["VISION", "AUDIO", "SENSOR", "PHONE", "MANUAL"] },
+    "detected_at":    { "type": "string", "format": "date-time" },
+    "category_hint":  { "type": ["string", "null"], "enum": ["FIRE", "MEDICAL", "STAMPEDE", "VIOLENCE", "SUSPICIOUS", "OTHER", null] },
+    "confidence":     { "type": "number", "minimum": 0, "maximum": 1 },
+    "evidence_uri":   { "type": ["string", "null"] },
+    "raw":            { "type": "object", "additionalProperties": true }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://aegis.ai/schemas/sensor_event.json",
+  "title": "SensorEvent",
+  "type": "object",
+  "required": ["event_id", "venue_id", "sensor_id", "sensor_type", "zone_id", "value", "observed_at"],
+  "properties": {
+    "event_id":    { "type": "string", "pattern": "^SNS-" },
+    "venue_id":    { "type": "string" },
+    "sensor_id":   { "type": "string" },
+    "sensor_type": { "type": "string", "enum": ["smoke", "co", "heat", "motion", "door", "panic_button"] },
+    "zone_id":     { "type": "string" },
+    "value":       { "type": "number" },
+    "triggered":   { "type": "boolean" },
+    "observed_at": { "type": "string", "format": "date-time" },
+    "metadata":    { "type": "object", "additionalProperties": true }
+  }
+}

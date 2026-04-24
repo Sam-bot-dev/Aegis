@@ -1,0 +1,96 @@
+[
+  {
+    "id": "kitchen_fire_high_conf",
+    "description": "Visible flame on a deep fryer, light smoke, staff retreating.",
+    "signals": [
+      {
+        "modality": "VISION",
+        "category_hint": "FIRE",
+        "confidence": 0.91,
+        "vision": {
+          "flame_visible": true,
+          "smoke_density": 0.4,
+          "people_count_estimate": 1
+        }
+      }
+    ],
+    "expected": {
+      "category": "FIRE",
+      "severity_min": "S2",
+      "dispatch_expected": true
+    }
+  },
+  {
+    "id": "kitchen_fire_medium_conf",
+    "description": "Ambiguous warm-colored reflection on stainless steel.",
+    "signals": [
+      { "modality": "VISION", "category_hint": "FIRE", "confidence": 0.62 }
+    ],
+    "expected": {
+      "category": "FIRE",
+      "severity_min": "S3",
+      "dispatch_expected": false
+    }
+  },
+  {
+    "id": "medical_distress_high",
+    "description": "Guest collapsed on lobby floor, bystander kneeling.",
+    "signals": [
+      { "modality": "VISION", "category_hint": "MEDICAL", "confidence": 0.88 }
+    ],
+    "expected": {
+      "category": "MEDICAL",
+      "severity_min": "S1",
+      "dispatch_expected": true
+    }
+  },
+  {
+    "id": "stampede_surge",
+    "description": "Dense crowd, bodies compressed, hands raised, person falling.",
+    "signals": [
+      { "modality": "VISION", "category_hint": "STAMPEDE", "confidence": 0.78 }
+    ],
+    "expected": {
+      "category": "STAMPEDE",
+      "severity_min": "S2",
+      "dispatch_expected": true
+    }
+  },
+  {
+    "id": "false_positive_steam",
+    "description": "Kitchen steam from dishwasher mistaken for smoke.",
+    "signals": [
+      { "modality": "VISION", "category_hint": "OTHER", "confidence": 0.15 }
+    ],
+    "expected": {
+      "category": "OTHER",
+      "severity_min": "S4",
+      "dispatch_expected": false
+    }
+  },
+  {
+    "id": "nominal_lobby",
+    "description": "Empty lobby, one person walking.",
+    "signals": [
+      { "modality": "VISION", "category_hint": "OTHER", "confidence": 0.05 }
+    ],
+    "expected": {
+      "category": "OTHER",
+      "severity_min": "S4",
+      "dispatch_expected": false
+    }
+  },
+  {
+    "id": "multi_signal_fire_with_sensor",
+    "description": "Camera detects flame + smoke sensor triggered nearby.",
+    "signals": [
+      { "modality": "VISION", "category_hint": "FIRE", "confidence": 0.82 },
+      { "modality": "SENSOR", "category_hint": "FIRE", "confidence": 0.9 }
+    ],
+    "expected": {
+      "category": "FIRE",
+      "severity_min": "S2",
+      "dispatch_expected": true
+    }
+  }
+]

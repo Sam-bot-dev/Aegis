@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://aegis.ai/schemas/incident_event.json",
+  "title": "IncidentEvent",
+  "description": "A state transition on an incident.",
+  "type": "object",
+  "required": ["event_id", "event_time", "venue_id", "incident_id", "to_status", "actor_type", "actor_id"],
+  "properties": {
+    "event_id":    { "type": "string", "pattern": "^EVT-" },
+    "event_time":  { "type": "string", "format": "date-time" },
+    "venue_id":    { "type": "string" },
+    "incident_id": { "type": "string", "pattern": "^INC-" },
+    "from_status": { "type": ["string", "null"] },
+    "to_status":   { "type": "string", "enum": ["DETECTED", "CLASSIFIED", "DISPATCHED", "ACKNOWLEDGED", "EN_ROUTE", "ON_SCENE", "TRIAGED", "RESOLVING", "VERIFIED", "CLOSED", "DISMISSED"] },
+    "actor_type":  { "type": "string", "enum": ["agent", "human", "system"] },
+    "actor_id":    { "type": "string" },
+    "payload":     { "type": "object", "additionalProperties": true }
+  }
+}

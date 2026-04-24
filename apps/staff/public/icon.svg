@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+  <title>Aegis Staff</title>
+  <defs>
+    <linearGradient id="staff" x1="0%" x2="100%" y1="0%" y2="100%">
+      <stop offset="0%" stop-color="#14B8A6" />
+      <stop offset="100%" stop-color="#0A0E14" />
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="#0A0E14" />
+  <path
+    d="M64 20 26 34v28c0 23 14 39 38 46 24-7 38-23 38-46V34L64 20Z"
+    fill="url(#staff)"
+    opacity=".96"
+  />
+  <path
+    d="M64 37 42 45v16c0 14 8 23 22 29 14-6 22-15 22-29V45L64 37Z"
+    fill="none"
+    stroke="#F8FAFC"
+    stroke-width="8"
+    stroke-linejoin="round"
+  />
+  <circle cx="64" cy="63" r="6" fill="#F8FAFC" />
+</svg>

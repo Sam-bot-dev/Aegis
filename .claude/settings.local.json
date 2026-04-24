@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(claude plugin *)",
+      "Bash(python -c \"from google.genai import types; help\\(types.Part\\)\")",
+      "Bash(flutter --version)",
+      "Bash(npm --version)",
+      "Bash(npm install *)",
+      "Bash(npm --workspace packages/ui-web run test)",
+      "Bash(NEXT_PUBLIC_FIREBASE_PROJECT_ID=aegis-gsc-2026 npm --workspace apps/staff run build)"
+    ]
+  }
+}

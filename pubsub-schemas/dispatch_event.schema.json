@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://aegis.ai/schemas/dispatch_event.json",
+  "title": "DispatchEvent",
+  "type": "object",
+  "required": ["event_id", "event_time", "venue_id", "incident_id", "dispatch_id", "to_status"],
+  "properties": {
+    "event_id":    { "type": "string", "pattern": "^DEV-" },
+    "event_time":  { "type": "string", "format": "date-time" },
+    "venue_id":    { "type": "string" },
+    "incident_id": { "type": "string", "pattern": "^INC-" },
+    "dispatch_id": { "type": "string", "pattern": "^DSP-" },
+    "to_status":   { "type": "string", "enum": ["PAGED", "ACKNOWLEDGED", "DECLINED", "EN_ROUTE", "ARRIVED", "HANDED_OFF", "TIMED_OUT"] },
+    "payload":     { "type": "object", "additionalProperties": true }
+  }
+}

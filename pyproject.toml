@@ -1,0 +1,79 @@
+# Root pyproject: tooling config shared across all services.
+# Each service has its own pyproject.toml for its runtime deps.
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = [".venv", "build", "dist", "__pycache__"]
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W",   # pycodestyle + pyflakes
+    "I",             # isort
+    "B",             # bugbear
+    "UP",            # pyupgrade
+    "N",             # pep8-naming
+    "S",             # bandit (security)
+    "A",             # builtins shadowing
+    "C4",            # comprehensions
+    "SIM",           # simplify
+    "RET",           # return
+    "PL",            # pylint
+    "RUF",           # ruff-specific
+]
+ignore = [
+    "S101",          # assert ok in tests
+    "PLR0913",       # too many args (we use kwargs)
+    "PLR2004",       # magic numbers (pragmatic)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S", "PLR"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_ignores = true
+warn_return_any = true
+disallow_untyped_defs = true
+disallow_any_generics = true
+no_implicit_optional = true
+check_untyped_defs = true
+ignore_missing_imports = true
+namespace_packages = true
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = [
+    "-ra",
+    "--strict-config",
+    "--strict-markers",
+    "--import-mode=importlib",
+]
+testpaths = ["services"]
+python_files = ["test_*.py", "*_test.py"]
+asyncio_mode = "auto"
+# Coverage flags intentionally omitted — run `pytest --cov=services` explicitly
+# in CI. This keeps local test runs fast and doesn't require pytest-cov
+# installed in every venv.
+
+[tool.coverage.run]
+source = ["services"]
+omit = ["*/tests/*", "*/__init__.py"]
+
+[tool.coverage.report]
+fail_under = 70
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]

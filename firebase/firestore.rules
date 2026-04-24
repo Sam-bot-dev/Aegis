@@ -1,0 +1,115 @@
+// Firestore rules for Aegis.
+//
+// Design:
+//   - Clients NEVER write to incident docs. Writes happen only via backend
+//     services using the Admin SDK, which bypasses rules. Rules here defend
+//     against a compromised client.
+//   - Every read is gated on venue membership or an explicit role claim.
+//   - Custom claims: role, venues (array of venue_ids), skills (array).
+//
+// Test with: firebase emulators:exec --only firestore "pytest firebase/tests/"
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ========== Helpers ==========
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVenueMember(venueId) {
+      return isSignedIn()
+        && request.auth.token.venues != null
+        && venueId in request.auth.token.venues;
+    }
+
+    function hasRole(role) {
+      return isSignedIn() && request.auth.token.role == role;
+    }
+
+    function hasAnyRole(roles) {
+      return isSignedIn() && request.auth.token.role in roles;
+    }
+
+    // ========== Venues ==========
+    match /venues/{venueId} {
+      allow read: if isVenueMember(venueId) || hasRole('authority_reviewer');
+      allow write: if false;  // Admin SDK only.
+
+      match /zones/{zoneId} {
+        allow read: if isVenueMember(venueId);
+        allow write: if false;
+      }
+
+      match /cameras/{cameraId} {
+        allow read: if isVenueMember(venueId);
+        allow write: if false;
+      }
+
+      match /sensors/{sensorId} {
+        allow read: if isVenueMember(venueId);
+        allow write: if false;
+      }
+
+      match /staff/{staffId} {
+        allow read: if isVenueMember(venueId);
+        allow write: if false;
+      }
+
+      match /responders/{responderId} {
+        allow read: if isVenueMember(venueId);
+        allow write: if false;
+      }
+
+      match /chat_rooms/{roomId} {
+        allow read: if isVenueMember(venueId)
+          && request.auth.uid in resource.data.members;
+
+        match /messages/{messageId} {
+          allow read: if isVenueMember(venueId);
+          allow create: if isVenueMember(venueId)
+            && request.auth.uid == request.resource.data.sender_id;
+          allow update, delete: if false;
+        }
+      }
+    }
+
+    // ========== Incidents ==========
+    match /incidents/{incidentId} {
+      allow read: if isVenueMember(resource.data.venue_id)
+        || hasRole('authority_reviewer');
+      allow write: if false;
+
+      match /{subcollection}/{docId} {
+        allow read: if isVenueMember(get(/databases/$(database)/documents/incidents/$(incidentId)).data.venue_id)
+          || hasRole('authority_reviewer');
+
+        // Only responders targeted by a dispatch may update acknowledge fields.
+        allow update: if subcollection == 'dispatches'
+          && resource.data.responder_id == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['acknowledged_at', 'en_route_at', 'arrived_at', 'notes', 'status']);
+
+        allow create, delete: if false;
+      }
+    }
+
+    // ========== Users ==========
+    match /users/{uid} {
+      allow read, update: if isSignedIn() && request.auth.uid == uid;
+      allow create: if false;
+      allow delete: if false;
+
+      match /devices/{deviceId} {
+        allow read, write: if isSignedIn() && request.auth.uid == uid;
+      }
+    }
+
+    // ========== Default deny ==========
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

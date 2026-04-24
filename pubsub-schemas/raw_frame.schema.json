@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://aegis.ai/schemas/raw_frame.json",
+  "title": "RawFrame",
+  "description": "A single frame emitted by the ingest service onto raw-frames.",
+  "type": "object",
+  "required": ["frame_id", "venue_id", "camera_id", "captured_at", "received_at", "bytes_base64", "size_bytes"],
+  "properties": {
+    "frame_id":     { "type": "string", "pattern": "^FRM-" },
+    "venue_id":     { "type": "string" },
+    "camera_id":    { "type": "string" },
+    "zone_id":      { "type": ["string", "null"] },
+    "captured_at":  { "type": "string", "format": "date-time" },
+    "received_at":  { "type": "string", "format": "date-time" },
+    "content_type": { "type": "string", "enum": ["image/jpeg", "image/jpg", "image/png"] },
+    "bytes_base64": { "type": "string", "contentEncoding": "base64" },
+    "size_bytes":   { "type": "integer", "minimum": 1, "maximum": 5242880 }
+  }
+}

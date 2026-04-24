@@ -1,0 +1,17 @@
+{
+    "recommendations": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "charliermarsh.ruff",
+        "ms-azuretools.vscode-docker",
+        "googlecloudtools.cloudcode",
+        "dart-code.dart-code",
+        "dart-code.flutter",
+        "esbenp.prettier-vscode",
+        "dbaeumer.vscode-eslint",
+        "bradlc.vscode-tailwindcss",
+        "hashicorp.terraform",
+        "redhat.vscode-yaml",
+        "toba.vsfire"
+    ]
+}
