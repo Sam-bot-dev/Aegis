@@ -79,7 +79,13 @@ class Settings(BaseSettings):
     # ---------- Security ----------
     service_internal_secret: str = Field(default="change-me")
     webhook_signing_key: str | None = Field(default=None)
-    cors_allowed_origins: list[str] = Field(default=["*"])
+    cors_allowed_origins: list[str] = Field(
+        default=[
+            "*",
+            "https://aegis-dashboard--aegis-gsc-2026.asia-southeast1.hosted.app",
+            "https://aegis-staff--aegis-gsc-2026.asia-southeast1.hosted.app",
+        ]
+    )
 
     @property
     def is_local(self) -> bool:
