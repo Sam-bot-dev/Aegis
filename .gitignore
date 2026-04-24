@@ -8,6 +8,7 @@ service-account-*.json
 google-credentials.json
 firebase-adminsdk-*.json
 .secrets/
+aegis-webhook*
 
 # ===== Python =====
 __pycache__/
@@ -102,6 +103,8 @@ ui-debug.log
 *.tfstate.*
 .terraform/
 .terraform.lock.hcl
+terraform.tfvars
+tfplan
 crash.log
 
 # ===== Docker =====

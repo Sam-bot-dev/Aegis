@@ -7,7 +7,12 @@
       "Bash(npm --version)",
       "Bash(npm install *)",
       "Bash(npm --workspace packages/ui-web run test)",
-      "Bash(NEXT_PUBLIC_FIREBASE_PROJECT_ID=aegis-gsc-2026 npm --workspace apps/staff run build)"
+      "Bash(NEXT_PUBLIC_FIREBASE_PROJECT_ID=aegis-gsc-2026 npm --workspace apps/staff run build)",
+      "Bash(npm audit *)",
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); m=d.get\\('metadata',{}\\).get\\('vulnerabilities',{}\\); print\\('vulns:', m\\); adv=d.get\\('vulnerabilities',{}\\); for k,v in list\\(adv.items\\(\\)\\)[:5]: print\\('-',k,v.get\\('severity'\\),v.get\\('range'\\)\\)\")",
+      "Bash(npm view *)",
+      "Bash(NEXT_PUBLIC_FIREBASE_PROJECT_ID=aegis-ci npm --workspace apps/staff run build)",
+      "Bash(NEXT_PUBLIC_FIREBASE_PROJECT_ID=aegis-ci npm --workspace apps/dashboard run build)"
     ]
   }
 }

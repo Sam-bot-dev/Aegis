@@ -1,22 +1,14 @@
 {
-  "firestore": {
-    "rules": "firebase/firestore.rules",
-    "indexes": "firebase/firestore.indexes.json"
-  },
-  "functions": [
+  "hosting": [
     {
-      "source": "firebase/functions",
-      "runtime": "nodejs20",
-      "predeploy": []
+      "target": "staff",
+      "public": "apps/staff/out",
+      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
+    },
+    {
+      "target": "dashboard",
+      "public": "apps/dashboard/out",
+      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
     }
-  ],
-  "emulators": {
-    "auth": { "port": 9099 },
-    "firestore": { "port": 8080 },
-    "functions": { "port": 5001 },
-    "pubsub": { "port": 8085 },
-    "storage": { "port": 9199 },
-    "ui": { "enabled": true, "port": 4000 },
-    "singleProjectMode": true
-  }
+  ]
 }
