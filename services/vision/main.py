@@ -62,16 +62,13 @@ app = FastAPI(
 )
 
 # CORS middleware handles preflights and adds headers.
-settings = get_settings()
-origins = settings.cors_allowed_origins
-allow_all = "*" in origins
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if allow_all else origins,
-    allow_credentials=not allow_all,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 log = get_logger(__name__)
 

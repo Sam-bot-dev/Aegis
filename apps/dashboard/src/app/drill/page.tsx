@@ -4,11 +4,11 @@ import * as React from "react";
 import Link from "next/link";
 
 const INGEST_BASE =
-  process.env.NEXT_PUBLIC_INGEST_URL || "http://localhost:8001";
+  (process.env.NEXT_PUBLIC_INGEST_URL || "http://localhost:8001").replace(/\/$/, "");
 const VISION_BASE =
-  process.env.NEXT_PUBLIC_VISION_URL || "http://localhost:8002";
+  (process.env.NEXT_PUBLIC_VISION_URL || "http://localhost:8002").replace(/\/$/, "");
 const ORCH_BASE =
-  process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || "http://localhost:8003";
+  (process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || "http://localhost:8003").replace(/\/$/, "");
 const VENUE = process.env.NEXT_PUBLIC_DEMO_VENUE_ID || "taj-ahmedabad";
 
 type Step = { label: string; status: "pending" | "running" | "ok" | "error"; detail?: string };

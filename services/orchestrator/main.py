@@ -70,16 +70,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="Aegis Orchestrator", version="0.1.0", lifespan=lifespan)
 
 # CORS middleware handles preflights and adds headers.
-settings = get_settings()
-origins = settings.cors_allowed_origins
-allow_all = "*" in origins
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if allow_all else origins,
-    allow_credentials=not allow_all,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 # Initialise at import time so ``TestClient(app)`` without a context manager
 # still finds the agent. The agent is cheap to construct.
