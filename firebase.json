@@ -1,14 +1,12 @@
 {
-  "hosting": [
+  "apphosting": [
     {
-      "target": "staff",
-      "public": "apps/staff/out",
-      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
+      "backendId": "aegis-staff",
+      "rootDir": "apps/staff"
     },
     {
-      "target": "dashboard",
-      "public": "apps/dashboard/out",
-      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
+      "backendId": "aegis-dashboard",
+      "rootDir": "apps/dashboard"
     }
   ]
 }

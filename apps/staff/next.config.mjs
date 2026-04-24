@@ -1,3 +1,4 @@
+// apps/staff/next.config.mjs
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -5,8 +6,6 @@ const nextConfig = {
   experimental: {
     typedRoutes: false,
   },
-
-  output: "export",
 };
 
 export default nextConfig;
