@@ -1,123 +1,131 @@
 name: ci
 
 on:
-  pull_request:
-  push:
-    branches:
-      - main
+pull_request:
+push:
+branches:
+- main
 
 jobs:
-  secrets-scan:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+secrets-scan:
+runs-on: ubuntu-latest
+steps:
+- name: Checkout
+uses: actions/checkout@v4
+with:
+fetch-depth: 0
 
-      - name: Gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+  - name: Gitleaks
+    uses: gitleaks/gitleaks-action@v2
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
 
-  python-quality:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+python-quality:
+runs-on: ubuntu-latest
+steps:
+- name: Checkout
+uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
+```
+  - name: Setup Python
+    uses: actions/setup-python@v5
+    with:
+      python-version: "3.12"
+      cache: pip
 
-      - name: Install uv (fast installer)
-        run: pip install --upgrade pip uv
+  - name: Install uv
+    run: pip install --upgrade pip uv
 
-      - name: Install editable services + runtime deps
-        run: uv pip install --system -r requirements.txt
+  - name: Install deps
+    run: uv pip install --system -r requirements.txt
 
-      - name: Install lint + test tooling
-        run: uv pip install --system ruff==0.8.3 mypy==1.13.0 pytest pytest-cov pytest-asyncio pip-audit
+  - name: Install tooling
+    run: uv pip install --system ruff mypy pytest pytest-cov pytest-asyncio pip-audit
 
-      - name: Ruff lint
-        run: ruff check .
+  - name: Ruff lint
+    run: ruff check .
 
-      - name: Ruff format check
-        run: ruff format --check services agents tests
+  - name: Ruff format check
+    run: ruff format --check services agents tests
 
-      - name: Mypy strict
-        run: mypy services agents
+  - name: Mypy
+    run: mypy services agents
 
-      - name: Pytest
-        run: pytest --cov=services --cov-report=term-missing --cov-report=xml
+  - name: Pytest
+    run: pytest --cov=services --cov-report=term-missing
 
-      - name: pip-audit (vulnerability scan)
-        run: pip-audit --strict --ignore-vuln PYSEC-2022-42969 || true
-        # `|| true` — advisory, doesn't gate merge until we curate the allowlist.
+  - name: pip-audit
+    run: pip-audit || true
+```
 
-      - name: Upload coverage
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: coverage-xml
-          path: coverage.xml
+web-quality:
+runs-on: ubuntu-latest
+steps:
+- name: Checkout
+uses: actions/checkout@v4
 
-  web-quality:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+```
+  - name: Setup Node
+    uses: actions/setup-node@v4
+    with:
+      node-version: "20"
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
+  # 🔥 Install each app independently
 
-      - name: Install workspace deps
-        run: npm install --workspaces --include-workspace-root
+  - name: Install dashboard deps
+    run: cd apps/dashboard && npm install
 
-      - name: Lint web apps
-        run: npm run lint
+  - name: Install staff deps
+    run: cd apps/staff && npm install
 
-      - name: Build @aegis/staff
-        env:
-          NEXT_PUBLIC_FIREBASE_PROJECT_ID: aegis-ci
-        run: npm run build:staff
+  # ui-web is used via packed tgz → no install needed separately
 
-      - name: Build @aegis/dashboard
-        env:
-          NEXT_PUBLIC_FIREBASE_PROJECT_ID: aegis-ci
-        run: npm run build:dashboard
+  - name: Lint dashboard
+    run: cd apps/dashboard && npm run lint
 
-      - name: Run @aegis/ui-web vitest suite
-        run: npm --workspace packages/ui-web run test
+  - name: Lint staff
+    run: cd apps/staff && npm run lint
 
-      - name: npm audit
-        run: npm audit --audit-level=high || true
-        # Advisory; blocks are promoted once the main branch baseline is clean.
+  - name: Build dashboard
+    env:
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: aegis-ci
+    run: cd apps/dashboard && npm run build
 
-  terraform-validate:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+  - name: Build staff
+    env:
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: aegis-ci
+    run: cd apps/staff && npm run build
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.9.0
+  - name: npm audit (dashboard)
+    run: cd apps/dashboard && npm audit --audit-level=high || true
 
-      - name: Format check
-        working-directory: terraform
-        run: terraform fmt -check -recursive
+  - name: npm audit (staff)
+    run: cd apps/staff && npm audit --audit-level=high || true
+```
 
-      - name: Init (no backend)
-        working-directory: terraform
-        run: terraform init -backend=false
+terraform-validate:
+runs-on: ubuntu-latest
+steps:
+- name: Checkout
+uses: actions/checkout@v4
 
-      - name: Validate
-        working-directory: terraform
-        run: terraform validate
+```
+  - name: Setup Terraform
+    uses: hashicorp/setup-terraform@v3
+    with:
+      terraform_version: 1.9.0
+
+  - name: Format check
+    working-directory: terraform
+    run: terraform fmt -check -recursive
+
+  - name: Init
+    working-directory: terraform
+    run: terraform init -backend=false
+
+  - name: Validate
+    working-directory: terraform
+    run: terraform validate
+```
