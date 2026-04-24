@@ -22,7 +22,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
 from aegis_shared import get_settings, setup_logging
-from aegis_shared.errors import DownstreamServiceError
+from aegis_shared.errors import DownstreamServiceError, AegisError
 from aegis_shared.gemini import get_gemini_client
 from aegis_shared.logger import get_logger
 from aegis_shared.prompts import load_prompt
@@ -34,8 +34,9 @@ from aegis_shared.schemas import (
     VisionClassification,
     VisionEvidence,
 )
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 
@@ -61,10 +62,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-from fastapi import Request, Response
-from fastapi.responses import JSONResponse
-from aegis_shared.errors import AegisError
-
 # 1. CORS middleware (must be early)
 app.add_middleware(
     CORSMiddleware,
@@ -74,6 +71,7 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"],
 )
+
 
 # 2. Global exception handler to prevent "No CORS header" on 500s
 @app.exception_handler(Exception)
@@ -96,7 +94,6 @@ async def global_exception_handler(request: Request, exc: Exception):
             "Access-Control-Allow-Headers": "*",
         },
     )
-log = get_logger(__name__)
 
 
 class AnalyzeRequest(BaseModel):
@@ -206,6 +203,7 @@ async def analyze(req: AnalyzeRequest) -> AnalyzeResponse:
         )
         used_gemini = True
     except DownstreamServiceError as exc:
+        log = get_logger(__name__)
         log.warning(
             "vision_gemini_fallback",
             venue_id=req.venue_id,
@@ -244,6 +242,7 @@ async def analyze(req: AnalyzeRequest) -> AnalyzeResponse:
 
     elapsed_ms = int((datetime.now(UTC) - start).total_seconds() * 1000)
 
+    log = get_logger(__name__)
     log.info(
         "vision_analyze_ok",
         signal_id=signal.signal_id,

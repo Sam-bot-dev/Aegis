@@ -33,6 +33,7 @@ from aegis_shared.firestore import (
 )
 from aegis_shared.logger import get_logger
 from aegis_shared.pubsub import publish_json
+from aegis_shared.errors import AegisError
 from aegis_shared.schemas import (
     Dispatch,
     DispatchEvent,
@@ -43,8 +44,9 @@ from aegis_shared.schemas import (
     ResponderSkill,
     new_id,
 )
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from agents.dispatcher.agent import ResponderRecord
@@ -74,10 +76,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-from fastapi import Request, Response
-from fastapi.responses import JSONResponse
-from aegis_shared.errors import AegisError
-
 # 1. CORS middleware (must be early)
 app.add_middleware(
     CORSMiddleware,
@@ -87,6 +85,7 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"],
 )
+
 
 # 2. Global exception handler to prevent "No CORS header" on 500s
 @app.exception_handler(Exception)
@@ -109,10 +108,11 @@ async def global_exception_handler(request: Request, exc: Exception):
             "Access-Control-Allow-Headers": "*",
         },
     )
+
+
 # Initialise at import time so ``TestClient(app)`` without a context manager
 # still finds the agent. The agent is cheap to construct.
 app.state.agent = OrchestratorAgent()
-log = get_logger(__name__)
 
 
 # ---- Request / response shapes ----
@@ -334,6 +334,7 @@ async def handle_batch(req: HandleBatchRequest) -> HandleResponse:
     if result.cascade.rationale:
         reasoning = f"{reasoning} Cascade: {result.cascade.rationale}"
 
+    log = get_logger(__name__)
     log.info(
         "orchestrator_handled",
         incident_id=incident.incident_id,

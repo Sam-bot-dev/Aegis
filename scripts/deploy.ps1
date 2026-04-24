@@ -34,14 +34,14 @@ try {
       --tag $image `
       --timeout=20m `
       --region=$Region `
+      --substitutions="_IMAGE=$image,_DOCKERFILE=services/$name/Dockerfile" `
       --config=- `
-      --substitutions=_IMAGE=$image,_DOCKERFILE=services/$name/Dockerfile `
-      <<'__YAML__'
+      @'
 steps:
   - name: gcr.io/cloud-builders/docker
     args: ["build", "-f", "${_DOCKERFILE}", "-t", "${_IMAGE}", "."]
 images: ["${_IMAGE}"]
-__YAML__
+'@
 
     Write-Host "=== Deploying aegis-$name to Cloud Run ===" -ForegroundColor Cyan
     gcloud run deploy "aegis-$name" `
