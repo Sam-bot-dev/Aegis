@@ -18,13 +18,12 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-
 from aegis_shared import get_settings, setup_logging
 from aegis_shared.errors import AegisError
 from aegis_shared.logger import get_logger
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from routers import frames, health, sensors
 
 
