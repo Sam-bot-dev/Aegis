@@ -37,14 +37,16 @@ class PublishResult:
 
 @lru_cache(maxsize=1)
 def get_publisher() -> Any:
-    """Return a cached Pub/Sub publisher client."""
+    """Return a cached Pub/Sub publisher client with message ordering enabled."""
     from google.cloud import pubsub_v1  # type: ignore[import-untyped,attr-defined]
 
     settings = get_settings()
     if settings.using_pubsub_emulator:
         log.info("pubsub_using_emulator", host=settings.pubsub_emulator_host)
 
-    return pubsub_v1.PublisherClient()
+    # Enable message ordering to support per-venue ordering keys.
+    publisher_options = pubsub_v1.types.PublisherOptions(enable_message_ordering=True)
+    return pubsub_v1.PublisherClient(publisher_options=publisher_options)
 
 
 def topic_path(topic: str) -> str:

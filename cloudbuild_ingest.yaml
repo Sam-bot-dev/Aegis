@@ -1,0 +1,4 @@
+steps:
+- name: gcr.io/cloud-builders/docker
+  args: ["build", "-f", "services/ingest/Dockerfile", "-t", "asia-south1-docker.pkg.dev/aegis-gsc-2026/aegis/aegis-ingest:latest", "."]
+images: ["asia-south1-docker.pkg.dev/aegis-gsc-2026/aegis/aegis-ingest:latest"]

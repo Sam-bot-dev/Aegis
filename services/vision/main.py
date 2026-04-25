@@ -21,6 +21,8 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
+from typing import Any
+
 from aegis_shared import get_settings, setup_logging
 from aegis_shared.errors import AegisError, DownstreamServiceError
 from aegis_shared.gemini import get_gemini_client

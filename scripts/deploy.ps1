@@ -31,8 +31,6 @@ try {
 
     # Build with the repo root as context so the Dockerfile can COPY services/shared, agents/, prompts/.
     gcloud builds submit `
-      --tag $image `
-      --timeout=20m `
       --region=$Region `
       --substitutions="_IMAGE=$image,_DOCKERFILE=services/$name/Dockerfile" `
       --config=- `

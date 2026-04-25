@@ -17,6 +17,8 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+from typing import Any
+
 from aegis_shared import get_settings, setup_logging
 from aegis_shared.errors import AegisError
 from aegis_shared.logger import get_logger
