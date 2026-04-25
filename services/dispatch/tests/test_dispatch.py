@@ -37,9 +37,31 @@ def _patch_side_effects(app_module):
     with (
         patch.object(app_module, "upsert_dispatch", new=AsyncMock()),
         patch.object(app_module, "write_audit", new=AsyncMock()),
+        patch.object(app_module, "update_incident_status", new=AsyncMock()),
+        patch.object(
+            app_module, "get_dispatch_by_id", new=AsyncMock(return_value=None)
+        ),
         patch.object(app_module, "send_to_tokens", return_value=[]),
     ):
         yield
+
+
+def _page(client, dispatch_id: str, **overrides) -> None:
+    """Helper: page a fresh dispatch so subsequent transitions are legal."""
+    payload = {
+        "dispatch_id": dispatch_id,
+        "incident_id": overrides.get("incident_id", "INC-test"),
+        "venue_id": overrides.get("venue_id", "taj-ahmedabad"),
+        "responder_id": overrides.get("responder_id", "RSP-test"),
+        "role": overrides.get("role", "Responder"),
+        "severity": overrides.get("severity", "S2"),
+        "category": overrides.get("category", "FIRE"),
+        "zone_id": overrides.get("zone_id", "kitchen-main"),
+        "rationale": overrides.get("rationale", "test"),
+        "fcm_tokens": overrides.get("fcm_tokens", []),
+    }
+    resp = client.post("/v1/dispatches", json=payload)
+    assert resp.status_code == 200, resp.text
 
 
 @pytest.fixture(autouse=True)
@@ -61,6 +83,7 @@ def test_health(client: TestClient) -> None:
 
 
 def test_ack_moves_to_acknowledged(client: TestClient) -> None:
+    _page(client, "DSP-123")
     resp = client.post("/v1/dispatches/DSP-123/ack")
     assert resp.status_code == 200
     assert resp.json()["status"] == "ACKNOWLEDGED"
@@ -68,11 +91,43 @@ def test_ack_moves_to_acknowledged(client: TestClient) -> None:
 
 def test_full_happy_path(client: TestClient) -> None:
     did = "DSP-abc"
+    _page(client, did)
     assert client.post(f"/v1/dispatches/{did}/ack").json()["status"] == "ACKNOWLEDGED"
     assert client.post(f"/v1/dispatches/{did}/enroute").json()["status"] == "EN_ROUTE"
     assert client.post(f"/v1/dispatches/{did}/arrived").json()["status"] == "ARRIVED"
     final = client.get(f"/v1/dispatches/{did}").json()
     assert final["status"] == "ARRIVED"
+
+
+def test_invalid_transition_rejected(client: TestClient) -> None:
+    """Cannot mark ARRIVED without going through ACK + EN_ROUTE first."""
+    did = "DSP-skip"
+    _page(client, did)
+    resp = client.post(f"/v1/dispatches/{did}/arrived")
+    assert resp.status_code == 409
+
+
+def test_create_dispatch_idempotent(client: TestClient) -> None:
+    """Duplicate Pub/Sub delivery must not reset an acknowledged dispatch."""
+    did = "DSP-dup"
+    _page(client, did)
+    assert client.post(f"/v1/dispatches/{did}/ack").json()["status"] == "ACKNOWLEDGED"
+    # Second create_dispatch should be a no-op and keep status ACKNOWLEDGED.
+    payload = {
+        "dispatch_id": did,
+        "incident_id": "INC-test",
+        "venue_id": "taj-ahmedabad",
+        "responder_id": "RSP-test",
+        "role": "Responder",
+        "severity": "S2",
+        "category": "FIRE",
+        "zone_id": "kitchen-main",
+        "rationale": "redelivery",
+        "fcm_tokens": [],
+    }
+    resp = client.post("/v1/dispatches", json=payload)
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ACKNOWLEDGED"
 
 
 def test_get_unknown_returns_404(client: TestClient) -> None:

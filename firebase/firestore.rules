@@ -64,8 +64,13 @@ service cloud.firestore {
       }
 
       match /chat_rooms/{roomId} {
-        allow read: if isVenueMember(venueId)
+        // ``resource.data`` is only available on single-document ``get()`` —
+        // for ``list()`` it is null and would cause PERMISSION_DENIED. Split
+        // the rule so members can list rooms in their venue and only
+        // members of a specific room can read it.
+        allow get: if isVenueMember(venueId)
           && request.auth.uid in resource.data.members;
+        allow list: if isVenueMember(venueId);
 
         match /messages/{messageId} {
           allow read: if isVenueMember(venueId);
@@ -83,7 +88,13 @@ service cloud.firestore {
       allow write: if false;
 
       match /{subcollection}/{docId} {
-        allow read: if isVenueMember(get(/databases/$(database)/documents/incidents/$(incidentId)).data.venue_id)
+        // ``venue_id`` is denormalised onto every IncidentEvent and
+        // DispatchEvent so we can avoid the cross-document ``get()`` that
+        // would double the read cost. Fall back to the parent doc only on
+        // the ``get()`` path for legacy rows that are missing it.
+        allow read: if ("venue_id" in resource.data
+              && isVenueMember(resource.data.venue_id))
+          || isVenueMember(get(/databases/$(database)/documents/incidents/$(incidentId)).data.venue_id)
           || hasRole('authority_reviewer');
 
         // Only responders targeted by a dispatch may update acknowledge fields.

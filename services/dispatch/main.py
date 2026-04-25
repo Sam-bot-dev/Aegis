@@ -2,7 +2,9 @@
 
 Owns the responder-engagement state machine per blueprint §9.2:
 
-    AVAILABLE → PAGED → ACKNOWLEDGED → EN_ROUTE → ARRIVED → ACTIVE → HANDED_OFF
+    PAGED → ACKNOWLEDGED → EN_ROUTE → ARRIVED → HANDED_OFF
+                ↘ DECLINED
+                ↘ TIMED_OUT (if no ack within 15s)
 
 Responsibilities:
     - Subscribe to ``dispatch-events`` (Pub/Sub push) and materialise dispatches
@@ -28,14 +30,51 @@ from typing import Any
 
 from aegis_shared import setup_logging
 from aegis_shared.audit import write_audit
+from aegis_shared.errors import AegisError
 from aegis_shared.fcm import send_to_tokens
-from aegis_shared.firestore import get_dispatch_by_id, upsert_dispatch
+from aegis_shared.firestore import (
+    get_dispatch_by_id,
+    update_incident_status,
+    upsert_dispatch,
+)
 from aegis_shared.logger import get_logger
-from aegis_shared.schemas import Dispatch, DispatchStatus, new_id
-from fastapi import FastAPI, HTTPException
+from aegis_shared.schemas import (
+    Dispatch,
+    DispatchStatus,
+    IncidentStatus,
+    PubSubEnvelope,
+    new_id,
+)
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 ACK_TIMEOUT_SECONDS = 15
+
+# Valid forward transitions for the dispatch state machine. A transition
+# from a status to itself is treated as idempotent (no-op) by ``_record``.
+VALID_TRANSITIONS: dict[DispatchStatus, set[DispatchStatus]] = {
+    DispatchStatus.PAGED: {
+        DispatchStatus.ACKNOWLEDGED,
+        DispatchStatus.DECLINED,
+        DispatchStatus.TIMED_OUT,
+    },
+    DispatchStatus.ACKNOWLEDGED: {
+        DispatchStatus.EN_ROUTE,
+        DispatchStatus.DECLINED,
+    },
+    DispatchStatus.EN_ROUTE: {
+        DispatchStatus.ARRIVED,
+        DispatchStatus.DECLINED,
+    },
+    DispatchStatus.ARRIVED: {
+        DispatchStatus.HANDED_OFF,
+    },
+    DispatchStatus.HANDED_OFF: set(),
+    DispatchStatus.DECLINED: set(),
+    DispatchStatus.TIMED_OUT: set(),
+}
 
 
 @asynccontextmanager
@@ -46,6 +85,36 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="Aegis Dispatch", version="0.1.0", lifespan=lifespan)
+
+# CORS — staff/responder PWAs call dispatch transitions directly from the browser.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+)
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    log_exc = get_logger(__name__)
+    log_exc.exception("unhandled_exception", path=request.url.path)
+    detail = "Internal Server Error"
+    if isinstance(exc, AegisError):
+        detail = str(exc)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": detail},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
+        },
+    )
+
+
 app.state.memory_store = {}
 app.state.pending_timeouts = {}
 log = get_logger(__name__)
@@ -71,11 +140,38 @@ class CreateDispatch(BaseModel):
     zone_id: str = ""
     rationale: str = ""
     fcm_tokens: list[str] = []
+    # Original dispatch-decision time on the orchestrator. When the message is
+    # delivered via Pub/Sub there is propagation lag, so the dispatch service
+    # honours this rather than stamping its own service-receive time.
+    paged_at: datetime | None = None
 
 
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok", "service": "dispatch"}
+
+
+def _validate_transition(current: DispatchStatus | None, target: DispatchStatus) -> None:
+    """Raise HTTPException 409 if ``target`` is not a legal next state."""
+    if current is None:
+        # First write — only PAGED is a valid initial state.
+        if target != DispatchStatus.PAGED:
+            raise HTTPException(
+                status_code=409,
+                detail=f"cannot start dispatch in status {target.value}; expected PAGED",
+            )
+        return
+    if current == target:
+        return  # idempotent
+    allowed = VALID_TRANSITIONS.get(current, set())
+    if target not in allowed:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"invalid transition {current.value} → {target.value}; "
+                f"allowed: {[s.value for s in allowed]}"
+            ),
+        )
 
 
 async def _record(
@@ -89,7 +185,27 @@ async def _record(
 ) -> DispatchState:
     now = datetime.now(UTC)
     store = app.state.memory_store
-    entry = store.get(dispatch_id, {})
+    entry = store.get(dispatch_id)
+    if entry is None:
+        # Hydrate from Firestore so transitions survive restarts.
+        persisted = await get_dispatch_by_id(dispatch_id)
+        if persisted:
+            entry = _hydrate_dispatch_entry(persisted)
+            store[dispatch_id] = entry
+    if entry is None:
+        entry = {}
+    current = entry.get("status")
+    _validate_transition(current, status)
+    if current == status and entry:
+        # Idempotent re-delivery — return current state without re-emitting side effects.
+        return DispatchState(
+            dispatch_id=dispatch_id,
+            incident_id=entry.get("incident_id"),
+            venue_id=entry.get("venue_id"),
+            responder_id=entry.get("responder_id"),
+            status=status,
+            last_updated_at=entry.get("last_updated_at", now),
+        )
     entry.update(
         {
             "dispatch_id": dispatch_id,
@@ -105,6 +221,7 @@ async def _record(
     store[dispatch_id] = entry
 
     if entry.get("incident_id") and entry.get("venue_id"):
+        paged_at = entry.get("paged_at")
         dispatch = Dispatch(
             dispatch_id=dispatch_id,
             venue_id=entry["venue_id"],
@@ -113,6 +230,7 @@ async def _record(
             role=entry.get("role", "Responder"),
             status=status,
             notes=entry.get("rationale", ""),
+            **({"paged_at": paged_at} if isinstance(paged_at, datetime) else {}),
         )
         if status == DispatchStatus.ACKNOWLEDGED:
             dispatch.acknowledged_at = now
@@ -186,35 +304,72 @@ def _cancel_timeout(dispatch_id: str) -> None:
 
 @app.post("/v1/dispatches", response_model=DispatchState)
 async def create_dispatch(req: CreateDispatch) -> DispatchState:
-    """Create a dispatch and send push. Usually invoked by the Pub/Sub subscriber."""
+    """Create a dispatch and send push. Usually invoked by the Pub/Sub subscriber.
+
+    Idempotent under at-least-once Pub/Sub delivery: if the dispatch already
+    exists past PAGED (already acknowledged, en route, etc.), we skip the page
+    and FCM send entirely and return the current state.
+    """
     dispatch_id = req.dispatch_id or new_id("DSP")
+
+    # Idempotency check (in-memory + Firestore hydration).
+    existing = app.state.memory_store.get(dispatch_id)
+    if existing is None:
+        persisted = await get_dispatch_by_id(dispatch_id)
+        if persisted:
+            existing = _hydrate_dispatch_entry(persisted)
+            app.state.memory_store[dispatch_id] = existing
+    if existing and existing.get("status") and existing["status"] != DispatchStatus.PAGED:
+        log.info(
+            "dispatch_create_idempotent_skip",
+            dispatch_id=dispatch_id,
+            current_status=existing["status"].value,
+        )
+        return DispatchState(
+            dispatch_id=dispatch_id,
+            incident_id=existing.get("incident_id"),
+            venue_id=existing.get("venue_id"),
+            responder_id=existing.get("responder_id"),
+            status=existing["status"],
+            last_updated_at=existing.get("last_updated_at", datetime.now(UTC)),
+        )
+    already_paged = bool(existing and existing.get("status") == DispatchStatus.PAGED)
+
     state = await _record(
         dispatch_id,
         DispatchStatus.PAGED,
         incident_id=req.incident_id,
         venue_id=req.venue_id,
         responder_id=req.responder_id,
-        extra={"role": req.role, "rationale": req.rationale},
+        extra={
+            "role": req.role,
+            "rationale": req.rationale,
+            "paged_at": req.paged_at or datetime.now(UTC),
+        },
     )
-    _arm_timeout(dispatch_id)
+    if not already_paged:
+        _arm_timeout(dispatch_id)
 
-    title = f"Aegis · {req.severity} {req.category}"
-    body = req.rationale or f"Incident {req.incident_id} needs your attention."
-    if req.fcm_tokens:
-        send_to_tokens(
-            req.fcm_tokens,
-            title=title,
-            body=body,
-            data={
-                "dispatch_id": dispatch_id,
-                "incident_id": req.incident_id,
-                "venue_id": req.venue_id,
-                "severity": req.severity,
-                "category": req.category,
-                "zone_id": req.zone_id,
-                "deep_link": f"aegis://incident/{req.incident_id}",
-            },
-        )
+        title = f"Aegis · {req.severity} {req.category}"
+        body = req.rationale or f"Incident {req.incident_id} needs your attention."
+        if req.fcm_tokens:
+            # FCM Admin SDK is sync HTTP. Hand off to a worker thread so the
+            # endpoint does not block the event loop for ~300ms per token.
+            await asyncio.to_thread(
+                send_to_tokens,
+                req.fcm_tokens,
+                title=title,
+                body=body,
+                data={
+                    "dispatch_id": dispatch_id,
+                    "incident_id": req.incident_id,
+                    "venue_id": req.venue_id,
+                    "severity": req.severity,
+                    "category": req.category,
+                    "zone_id": req.zone_id,
+                    "deep_link": f"aegis://incident/{req.incident_id}",
+                },
+            )
     return state
 
 
@@ -233,7 +388,12 @@ async def enroute(dispatch_id: str) -> DispatchState:
 @app.post("/v1/dispatches/{dispatch_id}/arrived", response_model=DispatchState)
 async def arrived(dispatch_id: str) -> DispatchState:
     _cancel_timeout(dispatch_id)
-    return await _record(dispatch_id, DispatchStatus.ARRIVED)
+    state = await _record(dispatch_id, DispatchStatus.ARRIVED)
+    if state.incident_id:
+        # Promote the parent incident to ON_SCENE so the dashboard reflects
+        # that a responder has physically reached the location.
+        await update_incident_status(state.incident_id, IncidentStatus.ON_SCENE.value)
+    return state
 
 
 @app.post("/v1/dispatches/{dispatch_id}/handoff", response_model=DispatchState)
@@ -257,6 +417,10 @@ async def get_dispatch(dispatch_id: str) -> DispatchState:
             raise HTTPException(status_code=404, detail="dispatch not found")
         entry = _hydrate_dispatch_entry(persisted)
         app.state.memory_store[dispatch_id] = entry
+        # Re-arm the ack timeout so a restart cannot leave a PAGED dispatch
+        # without enforcement; the timer self-no-ops once the status moves on.
+        if entry["status"] == DispatchStatus.PAGED:
+            _arm_timeout(dispatch_id)
     return DispatchState(
         dispatch_id=dispatch_id,
         incident_id=entry.get("incident_id"),
@@ -268,7 +432,17 @@ async def get_dispatch(dispatch_id: str) -> DispatchState:
 
 
 def _hydrate_dispatch_entry(data: dict[str, Any]) -> dict[str, Any]:
-    status = DispatchStatus(data["status"])
+    raw_status = data.get("status", DispatchStatus.PAGED.value)
+    try:
+        status = DispatchStatus(raw_status)
+    except ValueError:
+        log.warning(
+            "dispatch_unknown_status_in_firestore",
+            dispatch_id=data.get("dispatch_id"),
+            raw_status=raw_status,
+        )
+        status = DispatchStatus.PAGED
+    paged_at = data.get("paged_at")
     return {
         "dispatch_id": data["dispatch_id"],
         "incident_id": data.get("incident_id"),
@@ -277,6 +451,7 @@ def _hydrate_dispatch_entry(data: dict[str, Any]) -> dict[str, Any]:
         "role": data.get("role", "Responder"),
         "rationale": data.get("notes", ""),
         "status": status,
+        "paged_at": _coerce_datetime(paged_at) if paged_at else None,
         "last_updated_at": _latest_dispatch_timestamp(data),
     }
 
@@ -313,17 +488,6 @@ def _coerce_datetime(value: Any) -> datetime:
 # ---------- Pub/Sub push subscriber ----------
 
 
-class PubSubMessage(BaseModel):
-    data: str | None = None
-    attributes: dict[str, str] | None = None
-    messageId: str | None = None
-
-
-class PubSubEnvelope(BaseModel):
-    message: PubSubMessage
-    subscription: str | None = None
-
-
 @app.post("/pubsub/dispatch-events")
 async def pubsub_dispatch_events(envelope: PubSubEnvelope) -> dict[str, str]:
     """Push endpoint for ``dispatch-events``.
@@ -345,6 +509,13 @@ async def pubsub_dispatch_events(envelope: PubSubEnvelope) -> dict[str, str]:
         return {"ack": "true"}
 
     data = payload.get("payload", {})
+    paged_at: datetime | None = None
+    event_time = payload.get("event_time")
+    if isinstance(event_time, str):
+        try:
+            paged_at = datetime.fromisoformat(event_time.replace("Z", "+00:00"))
+        except ValueError:
+            paged_at = None
     await create_dispatch(
         CreateDispatch(
             dispatch_id=payload["dispatch_id"],
@@ -357,6 +528,7 @@ async def pubsub_dispatch_events(envelope: PubSubEnvelope) -> dict[str, str]:
             zone_id=data.get("zone_id", ""),
             rationale=data.get("rationale", ""),
             fcm_tokens=data.get("fcm_tokens", []),
+            paged_at=paged_at,
         )
     )
     return {"ack": "true"}

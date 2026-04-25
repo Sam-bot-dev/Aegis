@@ -7,6 +7,7 @@ import {
   IncidentCard,
   SeverityBadge,
   SEVERITY_COLOR,
+  DISPATCH_STATUS_COLOR,
   type Dispatch,
   type Incident,
   type Severity,
@@ -238,15 +239,7 @@ const CAMERA_ZONES = [
   "Loading Bay",
 ] as const;
 
-const DISPATCH_TONE: Record<Dispatch["status"], string> = {
-  PAGED: "#F59E0B",
-  ACKNOWLEDGED: "#F59E0B",
-  DECLINED: "#64748B",
-  EN_ROUTE: "#14B8A6",
-  ARRIVED: "#10B981",
-  HANDED_OFF: "#94A3B8",
-  TIMED_OUT: "#DC2626",
-};
+const DISPATCH_TONE = DISPATCH_STATUS_COLOR;
 
 export default function DashboardHome() {
   const [incidents, setIncidents] = React.useState<Incident[]>([]);

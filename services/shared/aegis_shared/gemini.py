@@ -18,6 +18,7 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Any, TypeVar
 
 from pydantic import BaseModel
@@ -266,12 +267,12 @@ class GeminiClient:
 
 # ===== Singleton access =====
 
-_CLIENT: GeminiClient | None = None
 
-
+@lru_cache(maxsize=1)
 def get_gemini_client() -> GeminiClient:
-    """Return a process-wide shared Gemini client."""
-    global _CLIENT
-    if _CLIENT is None:
-        _CLIENT = GeminiClient()
-    return _CLIENT
+    """Return a process-wide shared Gemini client.
+
+    ``lru_cache`` is used instead of a module-level None check so concurrent
+    coroutines see a single, atomic init under the GIL.
+    """
+    return GeminiClient()

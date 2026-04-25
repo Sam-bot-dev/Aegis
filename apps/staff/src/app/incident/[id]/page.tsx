@@ -64,6 +64,7 @@ export default function IncidentDetailPage() {
     };
   }, [id]);
 
+  const loaded = incident !== null;
   const severity = incident?.classification?.severity ?? "S4";
   const category = incident?.classification?.category ?? "OTHER";
   const primary = dispatches[0];
@@ -82,6 +83,29 @@ export default function IncidentDetailPage() {
   }
 
   const emergencyBg = severity === "S1" ? "#1A0A0A" : "var(--c-bg-primary)";
+
+  if (!loaded) {
+    return (
+      <main
+        style={{
+          minHeight: "100vh",
+          background: "var(--c-bg-primary)",
+          padding: 16,
+          maxWidth: 640,
+          margin: "0 auto",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "var(--c-ink-muted)",
+          fontFamily: "JetBrains Mono, monospace",
+          fontSize: 13,
+          letterSpacing: "0.08em",
+        }}
+      >
+        LOADING INCIDENT…
+      </main>
+    );
+  }
 
   return (
     <main
@@ -177,23 +201,29 @@ export default function IncidentDetailPage() {
           CLAIM
         </button>
         <button
-          disabled={!primary || acking}
+          disabled={
+            !primary ||
+            acking ||
+            (primary.status !== "PAGED" &&
+              primary.status !== "ACKNOWLEDGED" &&
+              primary.status !== "EN_ROUTE")
+          }
           onClick={() => act("decline")}
           style={secondaryBtn}
         >
-          Escalate
+          Decline
         </button>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 }}>
         <button
-          disabled={!primary || acking}
+          disabled={!primary || acking || primary.status !== "ACKNOWLEDGED"}
           onClick={() => act("enroute")}
           style={secondaryBtn}
         >
           En route
         </button>
         <button
-          disabled={!primary || acking}
+          disabled={!primary || acking || primary.status !== "EN_ROUTE"}
           onClick={() => act("arrived")}
           style={secondaryBtn}
         >
@@ -225,7 +255,7 @@ export default function IncidentDetailPage() {
                   {d.notes || "—"}
                 </div>
               </div>
-              <StatusPill status={d.status as any} />
+              <StatusPill status={d.status} />
             </div>
           ))
         )}

@@ -12,7 +12,25 @@
       "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); m=d.get\\('metadata',{}\\).get\\('vulnerabilities',{}\\); print\\('vulns:', m\\); adv=d.get\\('vulnerabilities',{}\\); for k,v in list\\(adv.items\\(\\)\\)[:5]: print\\('-',k,v.get\\('severity'\\),v.get\\('range'\\)\\)\")",
       "Bash(npm view *)",
       "Bash(NEXT_PUBLIC_FIREBASE_PROJECT_ID=aegis-ci npm --workspace apps/staff run build)",
-      "Bash(NEXT_PUBLIC_FIREBASE_PROJECT_ID=aegis-ci npm --workspace apps/dashboard run build)"
+      "Bash(NEXT_PUBLIC_FIREBASE_PROJECT_ID=aegis-ci npm --workspace apps/dashboard run build)",
+      "mcp__code-review-graph__list_graph_stats_tool",
+      "Bash(.venv/Scripts/python.exe -m pytest services/dispatch/tests services/orchestrator/tests services/ingest/tests services/vision/tests --tb=short -x)",
+      "Bash(.venv/Scripts/python.exe -m pytest services/dispatch/tests --tb=short)",
+      "Bash(.venv/Scripts/python.exe -m pytest services/ --tb=short)",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/ --tb=short)",
+      "Bash(.venv/Scripts/python.exe -m ruff check services agents)",
+      "Bash(.venv/Scripts/python.exe -c \"from agents.orchestrator.agent import OrchestratorAgent, OrchestratorInput, OrchestratorOutput; from agents.dispatcher.agent import DispatcherAgent, _derive_required_skills; from services.shared.aegis_shared.audit import write_audit; from services.shared.aegis_shared.firestore import update_incident_status, upsert_dispatch; print\\('imports ok'\\)\")",
+      "Bash(.venv/Scripts/python.exe -c ' *)",
+      "Bash(bash scripts/pack-ui.sh)",
+      "Bash(npm test *)",
+      "Bash(npm run *)",
+      "Bash(rm -rf node_modules package-lock.json)",
+      "Bash(npm cache *)",
+      "Bash(python -c \"import json; json.load\\(open\\('firebase/firestore.indexes.json'\\)\\); json.load\\(open\\('firebase.json'\\)\\); json.load\\(open\\('.firebaserc'\\)\\); print\\('all JSON parses OK'\\)\")"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "code-review-graph"
+  ]
 }

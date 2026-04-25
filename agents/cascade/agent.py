@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from aegis_shared.errors import DownstreamServiceError
+from aegis_shared.errors import AegisError
 from aegis_shared.gemini import GeminiClient, get_gemini_client
 from aegis_shared.logger import get_logger
 from aegis_shared.prompts import load_prompt
@@ -89,7 +89,7 @@ class CascadeAgent:
                 version=self.version,
             )
             return result
-        except DownstreamServiceError as exc:
+        except AegisError as exc:
             log.warning(
                 "cascade_fallback_to_rules",
                 venue_id=inp.venue_id,

@@ -49,36 +49,60 @@ export function getFirebaseApp(): FirebaseApp {
   return _app;
 }
 
+function isAlreadyConnectedError(err: unknown): boolean {
+  // The Firebase SDK throws when connect*Emulator is called twice. The
+  // message text is the only signal exposed; everything else is a real
+  // failure we should NOT swallow (otherwise we'd silently leave the client
+  // pointing at production).
+  const msg =
+    err && typeof err === "object" && "message" in err
+      ? String((err as { message: unknown }).message)
+      : "";
+  return /already.*(connected|started|been called)/i.test(msg);
+}
+
 export function getDb(): Firestore {
   if (_db) return _db;
-  _db = getFirestore(getFirebaseApp());
+  const db = getFirestore(getFirebaseApp());
   if (
     typeof window !== "undefined" &&
     process.env.NEXT_PUBLIC_USE_EMULATOR === "1"
   ) {
     try {
-      connectFirestoreEmulator(_db, "127.0.0.1", 8080);
-    } catch {
-      /* already connected */
+      connectFirestoreEmulator(db, "127.0.0.1", 8080);
+    } catch (err) {
+      if (!isAlreadyConnectedError(err)) {
+        // Surface the real error rather than silently using the production
+        // client when the developer asked for the emulator.
+        // eslint-disable-next-line no-console
+        console.error("connectFirestoreEmulator failed", err);
+        throw err;
+      }
     }
   }
+  _db = db;
   return _db;
 }
 
 export function getFirebaseAuth(): Auth {
   if (_auth) return _auth;
-  _auth = getAuth(getFirebaseApp());
+  const auth = getAuth(getFirebaseApp());
   if (
     typeof window !== "undefined" &&
     process.env.NEXT_PUBLIC_USE_EMULATOR === "1"
   ) {
     try {
-      connectAuthEmulator(_auth, "http://127.0.0.1:9099", {
+      connectAuthEmulator(auth, "http://127.0.0.1:9099", {
         disableWarnings: true,
       });
-    } catch {
-      /* already connected */
+    } catch (err) {
+      if (!isAlreadyConnectedError(err)) {
+        // eslint-disable-next-line no-console
+        console.error("connectAuthEmulator failed", err);
+        throw err;
+      }
     }
   }
+  _auth = auth;
   return _auth;
 }

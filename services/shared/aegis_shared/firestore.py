@@ -53,7 +53,9 @@ async def upsert_incident(incident: Any) -> None:
         return
     try:
         data = incident.model_dump(mode="json")
-        doc = data.get("incident_id") or data["incident_id"]
+        doc = data.get("incident_id")
+        if not doc:
+            raise ValueError("incident_id is required for upsert_incident")
         await client.collection("incidents").document(doc).set(data, merge=True)
         log.info("firestore_incident_upserted", incident_id=doc)
     except Exception as exc:
@@ -78,6 +80,48 @@ async def append_incident_event(incident_id: str, event: Any) -> None:
         log.warning("firestore_event_append_failed", error=str(exc))
 
 
+async def update_incident_status(incident_id: str, to_status: Any) -> None:
+    """Patch the parent incident's ``status`` field.
+
+    Used by the dispatch service when a responder reaches ARRIVED so the parent
+    incident leaves DISPATCHED and reflects ON_SCENE in real-time UIs.
+    Validates ``to_status`` against the IncidentStatus enum so we cannot write
+    a typo and break UI rendering.
+    """
+    from aegis_shared.schemas import IncidentStatus
+
+    if isinstance(to_status, IncidentStatus):
+        status_value = to_status.value
+    else:
+        try:
+            status_value = IncidentStatus(str(to_status)).value
+        except ValueError as exc:
+            raise ValueError(
+                f"invalid incident status: {to_status!r}"
+            ) from exc
+
+    client = _client_or_none()
+    if client is None:
+        return
+    try:
+        await (
+            client.collection("incidents")
+            .document(incident_id)
+            .set({"status": status_value}, merge=True)
+        )
+        log.info(
+            "firestore_incident_status_updated",
+            incident_id=incident_id,
+            status=status_value,
+        )
+    except Exception as exc:
+        log.warning(
+            "firestore_incident_status_update_failed",
+            incident_id=incident_id,
+            error=str(exc),
+        )
+
+
 async def upsert_dispatch(dispatch: Any) -> None:
     client = _client_or_none()
     if client is None:
@@ -86,8 +130,12 @@ async def upsert_dispatch(dispatch: Any) -> None:
         data = (
             dispatch.model_dump(mode="json") if hasattr(dispatch, "model_dump") else dict(dispatch)
         )
-        incident_id = data["incident_id"]
-        dispatch_id = data["dispatch_id"]
+        incident_id = data.get("incident_id")
+        dispatch_id = data.get("dispatch_id")
+        if not incident_id or not dispatch_id:
+            raise ValueError(
+                "upsert_dispatch requires both incident_id and dispatch_id"
+            )
         await (
             client.collection("incidents")
             .document(incident_id)
@@ -121,8 +169,14 @@ async def get_dispatch_by_id(dispatch_id: str) -> dict[str, Any] | None:
     if client is None:
         return None
     try:
+        # Use the FieldFilter form — positional ``.where("x", "==", y)`` is
+        # deprecated in google-cloud-firestore >= 2.16 and will be removed.
+        from google.cloud.firestore_v1.base_query import FieldFilter
+
         query = (
-            client.collection_group("dispatches").where("dispatch_id", "==", dispatch_id).limit(1)
+            client.collection_group("dispatches")
+            .where(filter=FieldFilter("dispatch_id", "==", dispatch_id))
+            .limit(1)
         )
         snapshot = await query.get()
         if not snapshot:

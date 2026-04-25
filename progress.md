@@ -577,6 +577,25 @@ What still blocks a live Phase 1 URL: executing `terraform apply`, `scripts/depl
 
 ---
 
+## New since last audit (2026-04-25 — deploy-day updates)
+
+**Deploy target pivoted to Firebase App Hosting (not static Firebase Hosting).** App Hosting runs Next.js as a managed Cloud Run service inside the same project — full SSR, live Firestore listeners on the server, auto TLS, GitHub auto-deploy. DEPLOY.md rewritten end-to-end to match.
+
+- [x] `firebase.json` now declares two App Hosting backends (`aegis-staff`, `aegis-dashboard`) pointing at `apps/staff/` and `apps/dashboard/` root dirs, each with its own `apphosting.yaml` for runtime config.
+- [x] Root-level `apphosting.yaml` is a fallback build config; each app's per-backend `apphosting.yaml` is where you set `minInstances`, env vars, secrets.
+- [x] Root `package.json` simplified: no more npm workspaces (App Hosting's build environment couldn't resolve sibling path deps from inside `apps/staff/`). Just convenience scripts that `cd` into each app.
+- [x] Shared React package `@aegis/ui-web` now ships to each app as a packed tarball: `packages/ui-web` builds via `tsc -p tsconfig.json` (tsconfig updated with `noEmit: false`, `outDir: "dist"`), `npm pack` produces `aegis-ui-web-0.1.0.tgz`, and both apps reference it as `file:aegis-ui-web-0.1.0.tgz`. CI re-packs on every run so a stale tgz can't slip through.
+- [x] `scripts/pack-ui.ps1` + `scripts/pack-ui.sh` automate the build → pack → copy-to-both-apps workflow. Run after every change under `packages/ui-web/`, commit the new `.tgz` in both app dirs.
+- [x] `.github/workflows/ci.yml` rewritten — the previous file got its indentation destroyed during an edit and failed to parse. New version matches the non-workspaces layout: pack ui-web → `cd apps/<app> && npm install && npm run lint && npm run build`, Python quality job unchanged, Terraform validate job added.
+- [x] `services/shared/aegis_shared/firestore.py::get_dispatch_by_id` switched from deprecated positional `.where("x", "==", y)` to the `FieldFilter` kwarg form. Eliminates the UserWarning that would become a hard error in a future Firestore SDK release.
+- [x] `requirements.txt` Windows absolute paths replaced with relative editable installs (`-e ./services/shared`, `-e ./agents`, etc.) so CI can install on Ubuntu.
+
+Deploy status: staff + dashboard shipped to App Hosting, Cloud Run backend services scripts ready but not run yet. Firebase Functions + Firestore rules not pushed yet.
+
+Known remaining gaps (deliberate — Phase 2): see Appendix C of DEPLOY.md.
+
+---
+
 ---
 
 # ═══════════════════════════════════════════════

@@ -17,12 +17,12 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, HTTPException
+from aegis_shared import get_settings, setup_logging
+from aegis_shared.errors import AegisError
+from aegis_shared.logger import get_logger
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from aegis_shared import get_settings, setup_logging
-from aegis_shared.logger import get_logger
-from aegis_shared.errors import AegisError
 from routers import frames, health, sensors
 
 
@@ -61,16 +61,16 @@ app.add_middleware(
 
 # 2. Global exception handler to prevent "No CORS header" on 500s
 @app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
+async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     log = get_logger(__name__)
     log.exception("unhandled_exception", path=request.url.path)
-    
+
     status_code = 500
     detail = "Internal Server Error"
-    
+
     if isinstance(exc, AegisError):
         detail = str(exc)
-        
+
     return JSONResponse(
         status_code=status_code,
         content={"detail": detail},

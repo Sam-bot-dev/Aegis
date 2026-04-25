@@ -18,7 +18,7 @@ import math
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
-from aegis_shared.errors import DownstreamServiceError
+from aegis_shared.errors import AegisError
 from aegis_shared.gemini import GeminiClient, get_gemini_client
 from aegis_shared.logger import get_logger
 from aegis_shared.prompts import load_prompt
@@ -209,7 +209,7 @@ class DispatcherAgent:
                     ordered_ids = filtered
                 used_gemini = True
                 rerank_rationale = rerank.rationale
-            except DownstreamServiceError as exc:
+            except AegisError as exc:
                 log.warning("dispatcher_rerank_failed", error=str(exc))
 
         dispatched: list[DispatchEntry] = []
@@ -218,7 +218,8 @@ class DispatcherAgent:
         # Primary: take top 1 for S2+; for S1 take top 2 (parallel dispatch).
         primary_n = 2 if inp.classification.severity == Severity.S1_CRITICAL else 1
         by_id = {r.responder_id: (r, score, eta) for r, score, eta in pool}
-        for rid in ordered_ids[:primary_n]:
+        primary_ids = ordered_ids[:primary_n]
+        for rid in primary_ids:
             r, score, eta = by_id[rid]
             dispatched.append(
                 DispatchEntry(
@@ -229,7 +230,24 @@ class DispatcherAgent:
                     rationale=f"Top composite score for {r.display_name}.",
                 )
             )
-        for r, score, eta in pool[primary_n : primary_n + 2]:
+
+        # Backup ladder honours the Gemini reranking: prefer the next IDs from
+        # ``ordered_ids`` (i.e., from the considered top-3) and fall through to
+        # the remaining pool entries by composite score, skipping anyone
+        # already promoted to primary.
+        used_ids: set[str] = set(primary_ids)
+        backup_candidates: list[tuple[ResponderRecord, float, int]] = []
+        for rid in ordered_ids[primary_n:]:
+            if rid in used_ids:
+                continue
+            backup_candidates.append(by_id[rid])
+            used_ids.add(rid)
+        for r, score, eta in pool:
+            if r.responder_id in used_ids:
+                continue
+            backup_candidates.append((r, score, eta))
+            used_ids.add(r.responder_id)
+        for r, score, eta in backup_candidates[:2]:
             backup.append(
                 DispatchEntry(
                     responder_id=r.responder_id,

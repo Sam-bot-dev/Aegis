@@ -8,6 +8,7 @@ import {
   SeverityBadge,
   CountdownRing,
   SEVERITY_COLOR,
+  DISPATCH_STATUS_COLOR,
   type Dispatch,
   type Incident,
   type IncidentEvent,
@@ -26,15 +27,7 @@ const DISPATCH_BASE =
 const ACK_COUNTDOWN_SECONDS = 15;
 type DispatchAction = "ack" | "arrived" | "decline" | "enroute" | "handoff";
 
-const DISPATCH_TONE: Record<Dispatch["status"], string> = {
-  PAGED: "#F59E0B",
-  ACKNOWLEDGED: "#F59E0B",
-  DECLINED: "#64748B",
-  EN_ROUTE: "#14B8A6",
-  ARRIVED: "#10B981",
-  HANDED_OFF: "#94A3B8",
-  TIMED_OUT: "#DC2626",
-};
+const DISPATCH_TONE = DISPATCH_STATUS_COLOR;
 
 export default function IncidentDetailPage() {
   const params = useParams<{ id: string }>();
@@ -87,16 +80,16 @@ export default function IncidentDetailPage() {
   const confidence = incident?.classification?.confidence
     ? `${Math.round(incident.classification.confidence * 100)}% confidence`
     : "Awaiting classification";
+  // Guards mirror the dispatch service state machine in
+  // services/dispatch/main.py::VALID_TRANSITIONS so the UI cannot prompt the
+  // operator to fire a transition the backend will reject with 409.
   const canAck = primary?.status === "PAGED";
-  const canDecline = primary?.status === "PAGED";
-  const canEnRoute =
+  const canDecline =
     primary !== null &&
-    ["ACKNOWLEDGED", "EN_ROUTE", "PAGED"].includes(primary.status);
-  const canArrive =
-    primary !== null &&
-    ["ACKNOWLEDGED", "ARRIVED", "EN_ROUTE"].includes(primary.status);
-  const canHandoff =
-    primary !== null && ["ARRIVED", "HANDED_OFF"].includes(primary.status);
+    ["PAGED", "ACKNOWLEDGED", "EN_ROUTE"].includes(primary.status);
+  const canEnRoute = primary?.status === "ACKNOWLEDGED";
+  const canArrive = primary?.status === "EN_ROUTE";
+  const canHandoff = primary?.status === "ARRIVED";
 
   async function act(path: DispatchAction) {
     if (!primary) return;
@@ -537,7 +530,7 @@ export default function IncidentDetailPage() {
                   onClick={() => act("decline")}
                   outline
                 >
-                  Escalate
+                  Decline
                 </ActionButton>
                 <ActionButton
                   color="transparent"

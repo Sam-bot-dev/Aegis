@@ -86,9 +86,18 @@ export default function DrillPage() {
         detail: `${orch.result.incident.incident_id} · ${orch.result.classification.severity} · dispatched=${orch.dispatched}`,
       });
     } catch (err) {
-      const last = steps.findIndex((s) => s.status === "running");
-      if (last >= 0) update(last, { status: "error", detail: String(err) });
-      else setSteps((s) => [...s, { label: "error", status: "error", detail: String(err) }]);
+      // ``steps`` here is the closure value from the start of trigger(); use
+      // the functional setter so we mark the currently-running step (if any)
+      // as failed instead of appending a phantom row.
+      setSteps((s) => {
+        const last = s.findIndex((step) => step.status === "running");
+        if (last >= 0) {
+          return s.map((step, i) =>
+            i === last ? { ...step, status: "error", detail: String(err) } : step,
+          );
+        }
+        return [...s, { label: "Error", status: "error", detail: String(err) }];
+      });
     } finally {
       setRunning(false);
     }

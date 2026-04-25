@@ -17,6 +17,12 @@ export function CountdownRing({
 }: CountdownRingProps) {
   const [remaining, setRemaining] = React.useState(totalSeconds);
   const firedRef = React.useRef(false);
+  // Pin onComplete in a ref so a re-render with a fresh inline callback does
+  // not re-trigger the timer effect and reset the countdown.
+  const onCompleteRef = React.useRef(onComplete);
+  React.useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
 
   React.useEffect(() => {
     setRemaining(totalSeconds);
@@ -27,13 +33,13 @@ export function CountdownRing({
     if (remaining <= 0) {
       if (!firedRef.current) {
         firedRef.current = true;
-        onComplete?.();
+        onCompleteRef.current?.();
       }
       return;
     }
     const t = setTimeout(() => setRemaining((r) => r - 1), 1000);
     return () => clearTimeout(t);
-  }, [remaining, onComplete]);
+  }, [remaining]);
 
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;

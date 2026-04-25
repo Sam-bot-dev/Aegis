@@ -25,6 +25,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from aegis_shared import get_settings, setup_logging
+from aegis_shared.errors import AegisError
 from aegis_shared.firestore import (
     append_incident_event,
     get_responders_for_venue,
@@ -33,7 +34,6 @@ from aegis_shared.firestore import (
 )
 from aegis_shared.logger import get_logger
 from aegis_shared.pubsub import publish_json
-from aegis_shared.errors import AegisError
 from aegis_shared.schemas import (
     Dispatch,
     DispatchEvent,
@@ -41,6 +41,7 @@ from aegis_shared.schemas import (
     IncidentEvent,
     IncidentStatus,
     PerceptualSignal,
+    PubSubEnvelope,
     ResponderSkill,
     new_id,
 )
@@ -49,7 +50,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from agents.dispatcher.agent import ResponderRecord
+from agents.dispatcher.agent import ResponderRecord, _derive_required_skills
 from agents.orchestrator.agent import (
     OrchestratorAgent,
     OrchestratorInput,
@@ -89,16 +90,16 @@ app.add_middleware(
 
 # 2. Global exception handler to prevent "No CORS header" on 500s
 @app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
+async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     log = get_logger(__name__)
     log.exception("unhandled_exception", path=request.url.path)
-    
+
     status_code = 500
     detail = "Internal Server Error"
-    
+
     if isinstance(exc, AegisError):
         detail = str(exc)
-        
+
     return JSONResponse(
         status_code=status_code,
         content={"detail": detail},
@@ -288,51 +289,68 @@ async def handle_batch(req: HandleBatchRequest) -> HandleResponse:
     )
 
     # Materialise dispatches + publish
+    # SAFETY GATE: S1 incidents in non-autonomous mode require operator approval.
+    # We still return the advisory plan but skip materialising real pages.
     dispatched = False
-    for entry in result.dispatch.dispatched:
-        dispatch = Dispatch(
-            venue_id=incident.venue_id,
+    required_skills = _derive_required_skills(classification, [])
+    if result.s1_hitl_gated:
+        log_gate = get_logger(__name__)
+        log_gate.warning(
+            "s1_dispatch_gated",
             incident_id=incident.incident_id,
-            responder_id=entry.responder_id,
-            role=entry.role,
-            status=DispatchStatus.PAGED,
-            required_skills=list(responders[0].skills if responders else []),
-            notes=entry.rationale,
+            venue_id=incident.venue_id,
+            reason="autonomous_mode=false; advisory only",
         )
-        await upsert_dispatch(dispatch)
+    else:
+        for entry in result.dispatch.dispatched:
+            dispatch = Dispatch(
+                venue_id=incident.venue_id,
+                incident_id=incident.incident_id,
+                responder_id=entry.responder_id,
+                role=entry.role,
+                status=DispatchStatus.PAGED,
+                required_skills=required_skills,
+                notes=entry.rationale,
+            )
+            await upsert_dispatch(dispatch)
 
-        dispatch_event = DispatchEvent(
-            venue_id=incident.venue_id,
-            incident_id=incident.incident_id,
-            dispatch_id=dispatch.dispatch_id,
-            to_status=DispatchStatus.PAGED,
-            payload={
-                "responder_id": entry.responder_id,
-                "role": entry.role,
-                "score": entry.score,
-                "eta_seconds": entry.eta_seconds,
-                "severity": classification.severity.value,
-                "category": classification.category.value,
-                "zone_id": incident.zone_id,
-                "rationale": entry.rationale,
-                "drill": result.drill_mode,
-            },
-        )
-        publish_json(
-            settings.pubsub_topic_dispatch,
-            dispatch_event,
-            ordering_key=f"{incident.venue_id}:{incident.incident_id}",
-            attributes={
-                "venue_id": incident.venue_id,
-                "incident_id": incident.incident_id,
-                "dispatch_id": dispatch.dispatch_id,
-            },
-        )
-        dispatched = True
+            dispatch_event = DispatchEvent(
+                venue_id=incident.venue_id,
+                incident_id=incident.incident_id,
+                dispatch_id=dispatch.dispatch_id,
+                to_status=DispatchStatus.PAGED,
+                payload={
+                    "responder_id": entry.responder_id,
+                    "role": entry.role,
+                    "score": entry.score,
+                    "eta_seconds": entry.eta_seconds,
+                    "severity": classification.severity.value,
+                    "category": classification.category.value,
+                    "zone_id": incident.zone_id,
+                    "rationale": entry.rationale,
+                    "drill": result.drill_mode,
+                },
+            )
+            publish_json(
+                settings.pubsub_topic_dispatch,
+                dispatch_event,
+                ordering_key=f"{incident.venue_id}:{incident.incident_id}",
+                attributes={
+                    "venue_id": incident.venue_id,
+                    "incident_id": incident.incident_id,
+                    "dispatch_id": dispatch.dispatch_id,
+                },
+            )
+            dispatched = True
 
     reasoning = classification.rationale
     if result.cascade.rationale:
         reasoning = f"{reasoning} Cascade: {result.cascade.rationale}"
+    if result.s1_hitl_gated:
+        reasoning = (
+            f"{reasoning} [Advisory only — S1 incident, autonomous_mode=false; "
+            f"awaiting operator approval to dispatch.]"
+        )
 
     log = get_logger(__name__)
     log.info(
@@ -347,17 +365,6 @@ async def handle_batch(req: HandleBatchRequest) -> HandleResponse:
 
 
 # ---- Pub/Sub push subscriber ----
-
-
-class PubSubMessage(BaseModel):
-    data: str | None = None
-    attributes: dict[str, str] | None = None
-    messageId: str | None = None
-
-
-class PubSubEnvelope(BaseModel):
-    message: PubSubMessage
-    subscription: str | None = None
 
 
 @app.post("/pubsub/perceptual-signals")

@@ -1,19 +1,6 @@
 {
   "projects": {
-    "Aegis": "aegis-gsc-2026",
     "default": "aegis-gsc-2026"
-  },
-  "targets": {
-    "aegis-gsc-2026": {
-      "hosting": {
-        "staff": [
-          "aegis-staff"
-        ],
-        "dashboard": [
-          "aegis-dashboard-c0f90"
-        ]
-      }
-    }
   },
   "etags": {}
 }

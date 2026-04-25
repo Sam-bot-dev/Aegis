@@ -66,6 +66,10 @@ async def ingest_frame(
         raise HTTPException(status_code=413, detail="frame exceeds 5 MB limit")
     if frame.content_type not in {"image/jpeg", "image/jpg", "image/png"}:
         log.warning("frame_unexpected_content_type", content_type=frame.content_type)
+        raise HTTPException(
+            status_code=415,
+            detail=f"unsupported content type: {frame.content_type or 'unknown'}",
+        )
 
     frame_id = new_id("FRM")
     received_at = datetime.now(UTC)

@@ -224,6 +224,27 @@ class DispatchEvent(BaseModel):
 # ===== Audit =====
 
 
+class PubSubMessage(BaseModel):
+    """Inner ``message`` field of a Pub/Sub push delivery envelope.
+
+    Pub/Sub pushes camelCase JSON (``messageId``); we accept both casings via
+    Pydantic's alias generator so callers can pick whichever shape fits.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    data: str | None = None
+    attributes: dict[str, str] | None = None
+    message_id: str | None = Field(default=None, alias="messageId")
+
+
+class PubSubEnvelope(BaseModel):
+    """Outer envelope for Pub/Sub push delivery."""
+
+    message: PubSubMessage
+    subscription: str | None = None
+
+
 class AuditEvent(BaseModel):
     """A single append-only audit row (also published to `audit-events`)."""
 

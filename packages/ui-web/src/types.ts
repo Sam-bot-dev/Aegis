@@ -76,6 +76,7 @@ export interface Dispatch {
   en_route_at?: string | null;
   arrived_at?: string | null;
   handed_off_at?: string | null;
+  required_skills?: string[];
   notes: string;
 }
 
@@ -111,4 +112,14 @@ export const STATUS_COLOR: Record<IncidentStatus, string> = {
   VERIFIED: "#10B981",
   CLOSED: "#64748B",
   DISMISSED: "#64748B",
+};
+
+export const DISPATCH_STATUS_COLOR: Record<DispatchStatus, string> = {
+  PAGED: "#F59E0B",
+  ACKNOWLEDGED: "#3B82F6",
+  DECLINED: "#94A3B8",
+  EN_ROUTE: "#3B82F6",
+  ARRIVED: "#14B8A6",
+  HANDED_OFF: "#10B981",
+  TIMED_OUT: "#DC2626",
 };

@@ -1,131 +1,144 @@
 name: ci
 
 on:
-pull_request:
-push:
-branches:
-- main
+  pull_request:
+  push:
+    branches:
+      - main
 
 jobs:
-secrets-scan:
-runs-on: ubuntu-latest
-steps:
-- name: Checkout
-uses: actions/checkout@v4
-with:
-fetch-depth: 0
+  secrets-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-```
-  - name: Gitleaks
-    uses: gitleaks/gitleaks-action@v2
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-```
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-python-quality:
-runs-on: ubuntu-latest
-steps:
-- name: Checkout
-uses: actions/checkout@v4
+  python-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-```
-  - name: Setup Python
-    uses: actions/setup-python@v5
-    with:
-      python-version: "3.12"
-      cache: pip
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
 
-  - name: Install uv
-    run: pip install --upgrade pip uv
+      - name: Install uv
+        run: pip install --upgrade pip uv
 
-  - name: Install deps
-    run: uv pip install --system -r requirements.txt
+      - name: Install editable services + runtime deps
+        run: uv pip install --system -r requirements.txt
 
-  - name: Install tooling
-    run: uv pip install --system ruff mypy pytest pytest-cov pytest-asyncio pip-audit
+      - name: Install tooling
+        run: uv pip install --system ruff mypy pytest pytest-cov pytest-asyncio pip-audit
 
-  - name: Ruff lint
-    run: ruff check .
+      - name: Ruff lint
+        run: ruff check .
 
-  - name: Ruff format check
-    run: ruff format --check services agents tests
+      - name: Ruff format check
+        run: ruff format --check services agents tests
 
-  - name: Mypy
-    run: mypy services agents
+      - name: Mypy strict
+        run: mypy services agents
 
-  - name: Pytest
-    run: pytest --cov=services --cov-report=term-missing
+      - name: Pytest
+        run: pytest --cov=services --cov-report=term-missing --cov-report=xml
 
-  - name: pip-audit
-    run: pip-audit || true
-```
+      - name: pip-audit (advisory)
+        run: pip-audit --skip-editable || true
 
-web-quality:
-runs-on: ubuntu-latest
-steps:
-- name: Checkout
-uses: actions/checkout@v4
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-xml
+          path: coverage.xml
 
-```
-  - name: Setup Node
-    uses: actions/setup-node@v4
-    with:
-      node-version: "20"
+  web-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-  # 🔥 Install each app independently
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
 
-  - name: Install dashboard deps
-    run: cd apps/dashboard && npm install
+      # The apps depend on @aegis/ui-web via a packed .tgz. Rebuild the tgz on
+      # every CI run from the current source so PRs can't accidentally ship
+      # with a stale tarball.
+      - name: Build + pack @aegis/ui-web
+        run: |
+          cd packages/ui-web
+          npm install --no-audit --no-fund
+          npx tsc -p tsconfig.json
+          npm pack
+          cp aegis-ui-web-0.1.0.tgz ../../apps/staff/aegis-ui-web-0.1.0.tgz
+          cp aegis-ui-web-0.1.0.tgz ../../apps/dashboard/aegis-ui-web-0.1.0.tgz
 
-  - name: Install staff deps
-    run: cd apps/staff && npm install
+      - name: Install staff deps
+        run: cd apps/staff && npm install --no-audit --no-fund
 
-  # ui-web is used via packed tgz → no install needed separately
+      - name: Install dashboard deps
+        run: cd apps/dashboard && npm install --no-audit --no-fund
 
-  - name: Lint dashboard
-    run: cd apps/dashboard && npm run lint
+      - name: Lint staff
+        run: cd apps/staff && npm run lint
 
-  - name: Lint staff
-    run: cd apps/staff && npm run lint
+      - name: Lint dashboard
+        run: cd apps/dashboard && npm run lint
 
-  - name: Build dashboard
-    env:
-      NEXT_PUBLIC_FIREBASE_PROJECT_ID: aegis-ci
-    run: cd apps/dashboard && npm run build
+      - name: Build staff
+        env:
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: aegis-ci
+        run: cd apps/staff && npm run build
 
-  - name: Build staff
-    env:
-      NEXT_PUBLIC_FIREBASE_PROJECT_ID: aegis-ci
-    run: cd apps/staff && npm run build
+      - name: Build dashboard
+        env:
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: aegis-ci
+        run: cd apps/dashboard && npm run build
 
-  - name: npm audit (dashboard)
-    run: cd apps/dashboard && npm audit --audit-level=high || true
+      - name: Run @aegis/ui-web vitest suite
+        run: |
+          cd packages/ui-web
+          npm install --no-audit --no-fund --include=dev
+          npm test
 
-  - name: npm audit (staff)
-    run: cd apps/staff && npm audit --audit-level=high || true
-```
+      - name: npm audit (staff)
+        run: cd apps/staff && npm audit --audit-level=high || true
 
-terraform-validate:
-runs-on: ubuntu-latest
-steps:
-- name: Checkout
-uses: actions/checkout@v4
+      - name: npm audit (dashboard)
+        run: cd apps/dashboard && npm audit --audit-level=high || true
 
-```
-  - name: Setup Terraform
-    uses: hashicorp/setup-terraform@v3
-    with:
-      terraform_version: 1.9.0
+  terraform-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-  - name: Format check
-    working-directory: terraform
-    run: terraform fmt -check -recursive
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
 
-  - name: Init
-    working-directory: terraform
-    run: terraform init -backend=false
+      - name: Format check
+        working-directory: terraform
+        run: terraform fmt -check -recursive
 
-  - name: Validate
-    working-directory: terraform
-    run: terraform validate
-```
+      - name: Init (no backend)
+        working-directory: terraform
+        run: terraform init -backend=false
+
+      - name: Validate
+        working-directory: terraform
+        run: terraform validate

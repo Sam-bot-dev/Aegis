@@ -54,9 +54,8 @@ export default function StaffHome() {
   const active = incidents.filter(
     (i) => !["CLOSED", "DISMISSED", "VERIFIED"].includes(i.status),
   );
-  const recent = incidents.filter(
-    (i) => !active.includes(i),
-  );
+  const activeIds = new Set(active.map((i) => i.incident_id));
+  const recent = incidents.filter((i) => !activeIds.has(i.incident_id));
 
   return (
     <main style={{ padding: 16, paddingTop: 24, maxWidth: 640, margin: "0 auto" }}>

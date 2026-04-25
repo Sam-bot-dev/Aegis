@@ -19,8 +19,10 @@ where ``prev_hash`` links to the previous row for the same incident and
 ``row_hash`` is SHA-256 over the row's fields concatenated with ``prev_hash``.
 A daily integrity job (Phase 2) re-walks the chain and alerts on break.
 
-The writer is **thread-safe** via a single async lock so row hashes remain
-monotonic per-incident even under concurrent writes.
+The chain head for each incident is held in Firestore under
+``/audit_chain_heads/{key}`` so multiple service instances can append without
+forking the chain. A local in-process cache + asyncio lock keeps the per-incident
+ordering monotonic within a single process.
 """
 
 from __future__ import annotations
@@ -41,6 +43,7 @@ log = get_logger(__name__)
 
 _LOCK = asyncio.Lock()
 _PREV_HASH_BY_INCIDENT: dict[str, str] = {}
+_CHAIN_HEAD_COLLECTION = "audit_chain_heads"
 
 
 def _serialise_for_hash(event: AuditEvent) -> str:
@@ -125,6 +128,54 @@ def _write_bigquery(event: AuditEvent) -> None:
         log.warning("audit_bq_insert_errors", errors=errors)
 
 
+# ---------- Cross-instance chain head (Firestore) ----------
+
+
+async def _link_chain_via_firestore(chain_key: str, event: AuditEvent) -> bool:
+    """Read prev_hash, compute row_hash, atomically advance chain head.
+
+    Mutates ``event.prev_hash`` and ``event.row_hash`` in place. Returns
+    ``True`` when Firestore is reachable and the swap succeeded, ``False``
+    when caller should fall back to the in-process cache.
+    """
+    try:
+        from aegis_shared.firestore import _client_or_none  # type: ignore[attr-defined]
+    except Exception:
+        return False
+
+    client = _client_or_none()
+    if client is None:
+        return False
+
+    try:
+        from google.cloud import firestore  # type: ignore[attr-defined]
+
+        doc_ref = client.collection(_CHAIN_HEAD_COLLECTION).document(chain_key)
+        transaction = client.transaction()
+
+        @firestore.async_transactional  # type: ignore[misc]
+        async def _swap(tx: Any) -> None:
+            snap = await doc_ref.get(transaction=tx)
+            prev = snap.get("row_hash") if snap.exists else None
+            event.prev_hash = prev
+            event.row_hash = _compute_row_hash(event)
+            tx.set(
+                doc_ref,
+                {
+                    "row_hash": event.row_hash,
+                    "updated_at": datetime.now(UTC),
+                    "venue_id": event.venue_id,
+                    "incident_id": event.incident_id,
+                },
+            )
+
+        await _swap(transaction)
+        return True
+    except Exception as exc:
+        log.warning("audit_chain_head_swap_failed", chain_key=chain_key, error=str(exc))
+        return False
+
+
 # ---------- Public API ----------
 
 
@@ -165,17 +216,22 @@ async def write_audit(
     )
     async with _LOCK:
         chain_key = event.incident_id or f"venue:{event.venue_id}"
-        event.prev_hash = _PREV_HASH_BY_INCIDENT.get(chain_key)
-        event.row_hash = _compute_row_hash(event)
-        _PREV_HASH_BY_INCIDENT[chain_key] = event.row_hash
+        linked_via_firestore = await _link_chain_via_firestore(chain_key, event)
+        if not linked_via_firestore:
+            event.prev_hash = _PREV_HASH_BY_INCIDENT.get(chain_key)
+            event.row_hash = _compute_row_hash(event)
+        # Mirror to in-process cache so subsequent same-instance reads stay
+        # consistent and so the JSONL fallback chain remains contiguous.
+        if event.row_hash:
+            _PREV_HASH_BY_INCIDENT[chain_key] = event.row_hash
 
     try:
-        _write_jsonl(event)
+        await asyncio.to_thread(_write_jsonl, event)
     except Exception as exc:
         log.error("audit_jsonl_write_failed", error=str(exc))
 
     try:
-        _write_bigquery(event)
+        await asyncio.to_thread(_write_bigquery, event)
     except Exception as exc:
         log.warning("audit_bq_write_failed", error=str(exc))
 

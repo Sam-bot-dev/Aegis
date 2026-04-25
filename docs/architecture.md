@@ -76,7 +76,7 @@ is 12–18 minutes; our target is p95 ≤ 60s.
            ▼
 ┌────────────────────────────────────────────────────────────────────┐
 │                       PRESENTATION                                  │
-│   Staff (Flutter)  Responder (Flutter)  Guest PWA  Venue Dashboard │
+│   Staff (Next.js PWA)  Responder (Next.js PWA)  Guest PWA  Venue Dashboard │
 │   Authority Console                                                 │
 └────────────────────────────────────────────────────────────────────┘
 ```

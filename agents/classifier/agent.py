@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from aegis_shared.errors import DownstreamServiceError
+from aegis_shared.errors import AegisError
 from aegis_shared.gemini import GeminiClient, get_gemini_client
 from aegis_shared.logger import get_logger
 from aegis_shared.prompts import load_prompt
@@ -93,7 +93,7 @@ class ClassifierAgent:
                 prompt_hash=prompt_hash,
                 version=self.version,
             )
-        except DownstreamServiceError as exc:
+        except AegisError as exc:
             log.warning(
                 "classifier_fallback_to_rules",
                 venue_id=inp.venue_id,
@@ -127,14 +127,21 @@ def _rule_based(inp: ClassifierInput) -> IncidentClassification:
         )
     hint = best.category_hint
     conf = best.confidence
+    # Best-effort sub_type from upstream Vision evidence; fall back to a
+    # generic label rather than always claiming KITCHEN_FIRE.
+    fire_sub = (
+        best.vision.sub_type
+        if best.vision and best.vision.sub_type
+        else "GENERAL_FIRE"
+    )
     if hint == IncidentCategory.FIRE and conf >= 0.8:
         sev = Severity.S2_URGENT
         rationale = "High-confidence fire signal with cascade risk."
-        sub = "KITCHEN_FIRE"
+        sub = fire_sub
     elif hint == IncidentCategory.FIRE and conf >= 0.5:
         sev = Severity.S3_MONITOR
         rationale = "Moderate-confidence fire signal; monitoring."
-        sub = "KITCHEN_FIRE"
+        sub = fire_sub
     elif hint == IncidentCategory.MEDICAL and conf >= 0.7:
         sev = Severity.S1_CRITICAL
         rationale = "Medical distress detected with high confidence."

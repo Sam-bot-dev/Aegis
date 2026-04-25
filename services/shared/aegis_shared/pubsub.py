@@ -15,6 +15,12 @@ from functools import lru_cache
 from typing import Any
 
 from pydantic import BaseModel
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from aegis_shared.config import get_settings
 from aegis_shared.errors import DownstreamServiceError
@@ -83,15 +89,28 @@ def publish_json(
             ordering_key=ordering_key,
         )
 
+    @retry(
+        retry=retry_if_exception_type(DownstreamServiceError),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=0.5, min=0.5, max=4),
+        reraise=True,
+    )
+    def _publish_once() -> str:
+        try:
+            future = publisher.publish(path, **kwargs)
+            return future.result(timeout=10)
+        except Exception as exc:
+            log.warning("pubsub_publish_attempt_failed", topic=topic, error=str(exc))
+            raise DownstreamServiceError(
+                f"Failed to publish to {topic}",
+                context={"topic": topic},
+            ) from exc
+
     try:
-        future = publisher.publish(path, **kwargs)
-        message_id = future.result(timeout=10)
-    except Exception as exc:
-        log.error("pubsub_publish_failed", topic=topic, error=str(exc))
-        raise DownstreamServiceError(
-            f"Failed to publish to {topic}",
-            context={"topic": topic},
-        ) from exc
+        message_id = _publish_once()
+    except DownstreamServiceError:
+        log.error("pubsub_publish_failed", topic=topic)
+        raise
 
     log.info(
         "pubsub_published",

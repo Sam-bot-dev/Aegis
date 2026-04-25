@@ -22,7 +22,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
 from aegis_shared import get_settings, setup_logging
-from aegis_shared.errors import DownstreamServiceError, AegisError
+from aegis_shared.errors import AegisError, DownstreamServiceError
 from aegis_shared.gemini import get_gemini_client
 from aegis_shared.logger import get_logger
 from aegis_shared.prompts import load_prompt
@@ -30,6 +30,7 @@ from aegis_shared.pubsub import publish_json
 from aegis_shared.schemas import (
     IncidentCategory,
     PerceptualSignal,
+    PubSubEnvelope,
     SignalModality,
     VisionClassification,
     VisionEvidence,
@@ -75,16 +76,16 @@ app.add_middleware(
 
 # 2. Global exception handler to prevent "No CORS header" on 500s
 @app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
+async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     log = get_logger(__name__)
     log.exception("unhandled_exception", path=request.url.path)
-    
+
     status_code = 500
     detail = "Internal Server Error"
-    
+
     if isinstance(exc, AegisError):
         detail = str(exc)
-        
+
     return JSONResponse(
         status_code=status_code,
         content={"detail": detail},
@@ -114,17 +115,6 @@ class AnalyzeResponse(BaseModel):
     wall_clock_ms: int
     used_gemini: bool
     prompt_hash: str
-
-
-class PubSubMessage(BaseModel):
-    data: str | None = None
-    attributes: dict[str, str] | None = None
-    message_id: str | None = Field(default=None, alias="messageId")
-
-
-class PubSubEnvelope(BaseModel):
-    message: PubSubMessage
-    subscription: str | None = None
 
 
 _HEURISTIC_FALLBACK = VisionClassification(
@@ -256,7 +246,7 @@ async def analyze(req: AnalyzeRequest) -> AnalyzeResponse:
 
     return AnalyzeResponse(
         signal=signal,
-        model=settings.gemini_flash_model,
+        model=settings.gemini_flash_model if used_gemini else "heuristic-fallback",
         wall_clock_ms=elapsed_ms,
         used_gemini=used_gemini,
         prompt_hash=prompt_hash,
@@ -276,13 +266,23 @@ async def pubsub_raw_frames(envelope: PubSubEnvelope) -> dict[str, str]:
 
     attributes = envelope.message.attributes or {}
 
+    resolved_zone = payload.get("zone_id") or attributes.get("zone_id")
+    if not resolved_zone:
+        # Cameras without a zone mapping previously silently leaked the
+        # camera id into ``zone_id``, polluting Firestore and downstream
+        # routing. Use an explicit sentinel so unmapped cameras are visible.
+        resolved_zone = "unknown-zone"
+        get_logger(__name__).warning(
+            "vision_zone_id_missing",
+            venue_id=payload.get("venue_id"),
+            camera_id=payload.get("camera_id"),
+        )
+
     try:
         request = AnalyzeRequest(
             venue_id=str(payload["venue_id"]),
             camera_id=str(payload["camera_id"]),
-            zone_id=str(
-                payload.get("zone_id") or attributes.get("zone_id") or payload["camera_id"]
-            ),
+            zone_id=str(resolved_zone),
             frame_base64=str(payload["bytes_base64"]),
             image_mime=str(payload.get("content_type") or "image/jpeg"),
             publish=True,

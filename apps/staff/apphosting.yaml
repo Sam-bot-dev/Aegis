@@ -1,24 +1,60 @@
-# Settings for Backend (on Cloud Run).
-# See https://firebase.google.com/docs/app-hosting/configure#cloud-run
+# Firebase App Hosting config for the Aegis Staff PWA.
+# Docs: https://firebase.google.com/docs/app-hosting/configure
+
 runConfig:
   minInstances: 0
-  # maxInstances: 100
-  # concurrency: 80
-  # cpu: 1
-  # memoryMiB: 512
+  maxInstances: 10
+  cpu: 1
+  memoryMiB: 512
 
-# Environment variables and secrets.
-# env:
-  # Configure environment variables.
-  # See https://firebase.google.com/docs/app-hosting/configure#user-defined-environment
-  # - variable: MESSAGE
-  #   value: Hello world!
-  #   availability:
-  #     - BUILD
-  #     - RUNTIME
-
-  # Grant access to secrets in Cloud Secret Manager.
-  # You can create secrets with the CLI command `firebase apphosting:secrets:set <secretName>`.
-  # See https://firebase.google.com/docs/app-hosting/configure#secret-parameters
-  # - variable: MY_SECRET
-  #   secret: mySecretRef
+# NEXT_PUBLIC_* values are inlined at build time, so they MUST be available
+# at BUILD. Backend service URLs and the Firebase web config are not secrets;
+# secret values (API keys with elevated scope, etc.) should be moved to
+# Cloud Secret Manager and referenced via `secret:` instead of `value:`.
+#
+# Create the referenced secrets once with:
+#   firebase apphosting:secrets:set NEXT_PUBLIC_FIREBASE_API_KEY
+#   firebase apphosting:secrets:set NEXT_PUBLIC_FIREBASE_APP_ID
+#   firebase apphosting:secrets:set NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+#   firebase apphosting:secrets:set NEXT_PUBLIC_INGEST_URL
+#   firebase apphosting:secrets:set NEXT_PUBLIC_VISION_URL
+#   firebase apphosting:secrets:set NEXT_PUBLIC_ORCHESTRATOR_URL
+#   firebase apphosting:secrets:set NEXT_PUBLIC_DISPATCH_URL
+#   firebase apphosting:secrets:set NEXT_PUBLIC_DASHBOARD_URL
+env:
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: aegis-gsc-2026
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: aegis-gsc-2026.firebaseapp.com
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: aegis-gsc-2026.appspot.com
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_DEMO_VENUE_ID
+    value: taj-ahmedabad
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    secret: NEXT_PUBLIC_FIREBASE_API_KEY
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    secret: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    secret: NEXT_PUBLIC_FIREBASE_APP_ID
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_INGEST_URL
+    secret: NEXT_PUBLIC_INGEST_URL
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_VISION_URL
+    secret: NEXT_PUBLIC_VISION_URL
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_ORCHESTRATOR_URL
+    secret: NEXT_PUBLIC_ORCHESTRATOR_URL
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_DISPATCH_URL
+    secret: NEXT_PUBLIC_DISPATCH_URL
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_DASHBOARD_URL
+    secret: NEXT_PUBLIC_DASHBOARD_URL
+    availability: [BUILD, RUNTIME]

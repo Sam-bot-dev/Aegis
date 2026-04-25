@@ -58,6 +58,8 @@ class OrchestratorOutput(BaseModel):
     dispatch: DispatcherOutput
     agent_trace: list[str] = Field(default_factory=list)
     drill_mode: bool = False
+    autonomous_mode: bool = False
+    s1_hitl_gated: bool = False
     external_webhooks_fired: bool = False
 
 
@@ -168,9 +170,16 @@ class OrchestratorAgent:
             )
 
         cascade_output = await cascade_task
-        classification.cascade_predictions = cascade_output.predictions
+        # Prefer the dedicated CascadeAgent's predictions when it produced any.
+        # If the CascadeAgent fell back to the heuristic and the upstream
+        # ClassifierAgent already returned cascade predictions (from Gemini),
+        # keep the classifier's so we don't waste those tokens.
+        if cascade_output.predictions:
+            classification.cascade_predictions = cascade_output.predictions
+        elif not classification.cascade_predictions:
+            classification.cascade_predictions = []
         trace.append(
-            f"Cascade: {len(cascade_output.predictions)} predictions, "
+            f"Cascade: {len(classification.cascade_predictions)} predictions, "
             f"{len(cascade_output.recommended_preemptive_actions)} recommended actions"
         )
         await write_audit(
@@ -209,11 +218,12 @@ class OrchestratorAgent:
         # Safety envelope: S1 requires operator opt-in via autonomous_mode.
         # If off, we still return the dispatch plan but mark it advisory so
         # downstream (the HTTP layer / UI) knows to keep the human gate.
-        if (
+        s1_hitl_gated = (
             classification.severity == Severity.S1_CRITICAL
             and not autonomous_mode
             and not drill_mode
-        ):
+        )
+        if s1_hitl_gated:
             trace.append("S1 gated on human operator (autonomous_mode=false)")
 
         return OrchestratorOutput(
@@ -223,5 +233,7 @@ class OrchestratorAgent:
             dispatch=dispatch_output,
             agent_trace=trace,
             drill_mode=drill_mode,
-            external_webhooks_fired=not drill_mode,
+            autonomous_mode=autonomous_mode,
+            s1_hitl_gated=s1_hitl_gated,
+            external_webhooks_fired=False,
         )

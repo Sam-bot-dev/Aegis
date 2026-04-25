@@ -1,11 +1,27 @@
 import * as React from "react";
-import { STATUS_COLOR, type IncidentStatus } from "../types";
+import {
+  DISPATCH_STATUS_COLOR,
+  STATUS_COLOR,
+  type DispatchStatus,
+  type IncidentStatus,
+} from "../types";
 
 export interface StatusPillProps {
-  status: IncidentStatus;
+  status: IncidentStatus | DispatchStatus;
+}
+
+const FALLBACK_COLOR = "#64748B";
+
+function colorFor(status: IncidentStatus | DispatchStatus): string {
+  return (
+    (STATUS_COLOR as Record<string, string>)[status] ||
+    (DISPATCH_STATUS_COLOR as Record<string, string>)[status] ||
+    FALLBACK_COLOR
+  );
 }
 
 export function StatusPill({ status }: StatusPillProps) {
+  const color = colorFor(status);
   return (
     <span
       style={{
@@ -18,7 +34,7 @@ export function StatusPill({ status }: StatusPillProps) {
         letterSpacing: "0.06em",
         color: "#F1F5F9",
         background: "rgba(255,255,255,0.04)",
-        border: `1px solid ${STATUS_COLOR[status]}`,
+        border: `1px solid ${color}`,
         borderRadius: 999,
       }}
     >
@@ -27,7 +43,7 @@ export function StatusPill({ status }: StatusPillProps) {
           width: 6,
           height: 6,
           borderRadius: 999,
-          background: STATUS_COLOR[status],
+          background: color,
         }}
       />
       {status}
