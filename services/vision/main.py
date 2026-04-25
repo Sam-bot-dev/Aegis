@@ -20,8 +20,12 @@ import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-
 from typing import Any
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 
 from aegis_shared import get_settings, setup_logging
 from aegis_shared.errors import AegisError, DownstreamServiceError
@@ -37,10 +41,6 @@ from aegis_shared.schemas import (
     VisionClassification,
     VisionEvidence,
 )
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
 
 
 @asynccontextmanager
