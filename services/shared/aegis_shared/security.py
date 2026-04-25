@@ -41,14 +41,26 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
 
         # Content Security Policy — restrict resource loading
-        # Adjust `default-src` based on your frontend origins
+        # connect-src must allow Cloud Run backends (*.run.app), Firebase App Hosting
+        # frontends as initiators (*.hosted.app), and the Firebase/Google APIs the
+        # SDK calls (Firestore realtime via wss://*.firebaseio.com, Auth token
+        # refresh via *.googleapis.com).  Without these the browser blocks every
+        # cross-origin fetch the frontend makes.
         csp_directives = [
             "default-src 'self'",
-            "script-src 'self' 'unsafe-inline'",  # Next.js needs inline for dev; tighten for prod
+            "script-src 'self' 'unsafe-inline'",  # Next.js needs inline; tighten with nonces in prod
             "style-src 'self' 'unsafe-inline'",
-            "img-src 'self' data: https:",
+            "img-src 'self' data: blob: https:",
             "font-src 'self' data:",
-            "connect-src 'self'",  # API calls; add backend URLs if different origin
+            (
+                "connect-src 'self'"
+                " https://*.run.app"
+                " https://*.hosted.app"
+                " wss://*.firebaseio.com"
+                " https://*.firebaseio.com"
+                " https://*.googleapis.com"
+            ),
+            "worker-src 'self' blob:",
             "frame-ancestors 'none'",  # Prevent clickjacking
         ]
         response.headers["Content-Security-Policy"] = "; ".join(csp_directives)
@@ -59,9 +71,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # Clickjack protection
         response.headers["X-Frame-Options"] = "DENY"
 
-        # HSTS — force HTTPS for 1 year (only in production)
+        # HSTS — force HTTPS for 1 year on all cloud environments.
+        # Intentionally skipped for 'local' (emulator runs over plain HTTP).
         settings = get_settings()
-        if settings.is_prod or settings.aegis_env in ("staging", "dev"):
+        if settings.aegis_env in ("prod", "staging", "dev"):
             response.headers["Strict-Transport-Security"] = (
                 "max-age=31536000; includeSubDomains; preload"
             )

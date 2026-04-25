@@ -15,7 +15,12 @@ import {
 import {
   getAuth,
   connectAuthEmulator,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signInWithEmailAndPassword,
+  signOut,
   type Auth,
+  type User,
 } from "firebase/auth";
 
 export interface FirebaseConfig {
@@ -33,7 +38,8 @@ export function readFirebaseConfig(): FirebaseConfig {
     authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ?? "",
     projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? "",
     storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ?? "",
-    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ?? "",
+    messagingSenderId:
+      process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ?? "",
     appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID ?? "",
   };
 }
@@ -50,10 +56,6 @@ export function getFirebaseApp(): FirebaseApp {
 }
 
 function isAlreadyConnectedError(err: unknown): boolean {
-  // The Firebase SDK throws when connect*Emulator is called twice. The
-  // message text is the only signal exposed; everything else is a real
-  // failure we should NOT swallow (otherwise we'd silently leave the client
-  // pointing at production).
   const msg =
     err && typeof err === "object" && "message" in err
       ? String((err as { message: unknown }).message)
@@ -72,8 +74,6 @@ export function getDb(): Firestore {
       connectFirestoreEmulator(db, "127.0.0.1", 8080);
     } catch (err) {
       if (!isAlreadyConnectedError(err)) {
-        // Surface the real error rather than silently using the production
-        // client when the developer asked for the emulator.
         // eslint-disable-next-line no-console
         console.error("connectFirestoreEmulator failed", err);
         throw err;
@@ -105,4 +105,32 @@ export function getFirebaseAuth(): Auth {
   }
   _auth = auth;
   return _auth;
+}
+
+export function getCurrentUser(): User | null {
+  return getFirebaseAuth().currentUser;
+}
+
+/** Sign in with Google — popup flow. */
+export async function signInWithGoogle(): Promise<User> {
+  const auth = getFirebaseAuth();
+  const provider = new GoogleAuthProvider();
+  const result = await signInWithPopup(auth, provider);
+  return result.user;
+}
+
+/** Sign in with email + password. */
+export async function signInWithEmail(
+  email: string,
+  password: string,
+): Promise<User> {
+  const auth = getFirebaseAuth();
+  const result = await signInWithEmailAndPassword(auth, email, password);
+  return result.user;
+}
+
+/** Sign out current user. */
+export async function doSignOut(): Promise<void> {
+  const auth = getFirebaseAuth();
+  await signOut(auth);
 }

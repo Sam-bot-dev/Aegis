@@ -79,15 +79,14 @@ class Settings(BaseSettings):
     # ---------- Security ----------
     service_internal_secret: str = Field(default="change-me")
     webhook_signing_key: str | None = Field(default=None)
-    # CORS origins for the API. Default is permissive for local dev; in production
-    # set via environment variable (comma-separated) to the specific frontend URLs.
-    cors_allowed_origins: list[str] = Field(
-        default=[
-            "http://localhost:3000",
-            "http://localhost:3001",
-            "http://localhost:3002",
-        ]
-    )
+    # CORS origins for the API.
+    # "*" is safe here because allow_credentials is always False (see security.py).
+    # In production you can tighten this by setting CORS_ALLOWED_ORIGINS as a
+    # JSON array in the environment, e.g.:
+    #   CORS_ALLOWED_ORIGINS='["https://aegis-staff.web.app","https://aegis-dashboard.web.app"]'
+    # FastAPI's CORSMiddleware does NOT support glob patterns such as *.hosted.app,
+    # so wildcard "*" is the correct default when App Hosting URLs are not yet known.
+    cors_allowed_origins: list[str] = Field(default=["*"])
 
     @property
     def is_local(self) -> bool:

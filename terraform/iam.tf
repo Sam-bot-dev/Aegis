@@ -73,3 +73,13 @@ resource "google_project_iam_member" "vision_storage" {
   role    = "roles/storage.objectViewer"
   member  = "serviceAccount:${google_service_account.service_sa["aegis-vision"].email}"
 }
+
+# Public invoker access — required for frontend apps to call these endpoints
+resource "google_cloud_run_service_iam_member" "public_invoker" {
+  for_each = toset(var.cloud_run_services)
+
+  location = var.region
+  service  = each.key
+  role     = "roles/run.invoker"
+  member   = "allUsers"
+}

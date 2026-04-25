@@ -3,10 +3,16 @@
 import { getDb, type Incident, type IncidentStatus, type Severity } from "@aegis/ui-web";
 import {
   collection,
-  doc,
-  setDoc,
-  serverTimestamp,
+  onSnapshot,
+  orderBy,
+  query,
+  where,
+  type QueryConstraint,
 } from "firebase/firestore";
+import { useRouter } from "next/navigation";
+import { VENUE, SEV_LABEL, zoneById, responderById } from "@/lib/venue";
+import { useUI } from "@/lib/ui";
+import { callDispatch, checkHealth, checkAllHealth, pageResponder, runDrill } from "./actions";
 
 const DISPATCH_BASE = process.env.NEXT_PUBLIC_DISPATCH_URL || "http://localhost:8004";
 const ORCH_BASE = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || "http://localhost:8003";
@@ -21,126 +27,48 @@ const SERVICE_BASES = {
 } as const;
 export type ServiceName = keyof typeof SERVICE_BASES;
 
-// ── Firestore helpers ─────────────────────────────────────────────────────
-async function appendIncidentEvent(
-  incidentId: string,
-  toStatus: IncidentStatus,
-  fromStatus: IncidentStatus | null,
-  actorId: string,
-  payload: Record<string, unknown> = {},
-) {
-  const db = getDb();
-  const eventsCol = collection(db, "incidents", incidentId, "events");
-  const eventId = `op-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-  await setDoc(doc(eventsCol, eventId), {
-    event_id: eventId,
-    event_time: new Date().toISOString(),
-    venue_id: "taj-ahmedabad",
-    incident_id: incidentId,
-    from_status: fromStatus,
-    to_status: toStatus,
-    actor_type: "operator",
-    actor_id: actorId,
-    payload,
-    created_at: serverTimestamp(),
-  });
+// ── Firestore queries (read-only) ─────────────────────────────────────────
+export function useIncidents(venueId: string, statusFilter?: string) {
+  const [incidents, setIncidents] = React.useState<Incident[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const { error } = useUI();
+
+  React.useEffect(() => {
+    if (!venueId) return;
+    const db = getDb();
+    const q = query(
+      collection(db, "incidents"),
+      where("venue_id", "==", venueId),
+      orderBy("created_at", "desc"),
+    );
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const items = snap.docs.map((d) => ({
+          ...d.data(),
+        })) as Incident[];
+        if (statusFilter) {
+          items.filter((i) => i.status === statusFilter);
+        }
+        setIncidents(items);
+        setLoading(false);
+      },
+      (err) => {
+        error(`Failed to load incidents: ${err.message}`);
+        setLoading(false);
+      },
+    );
+    return unsub;
+  }, [venueId, statusFilter]);
+
+  return { incidents, loading };
 }
 
-async function patchIncidentStatus(
-  incident: Incident,
-  next: IncidentStatus,
-  actorId: string,
-  payload: Record<string, unknown> = {},
-) {
-  const db = getDb();
-  const update: Partial<Incident> & { resolved_at?: string } = { status: next };
-  if (next === "CLOSED" || next === "DISMISSED") {
-    update.resolved_at = new Date().toISOString();
-  }
-  await setDoc(doc(db, "incidents", incident.incident_id), update, { merge: true });
-  await appendIncidentEvent(incident.incident_id, next, incident.status, actorId, payload);
-}
+// NOTE: Incident state transitions (acknowledge/dismiss/resolve/escalate) are
+// now handled via backend API calls (callDispatch, etc.) — not direct Firestore.
+// The backend services update incidents via Admin SDK.
 
-// ── Incident state mutations ──────────────────────────────────────────────
-export async function acknowledgeIncident(incident: Incident, actor = "operator-w") {
-  await patchIncidentStatus(incident, "ACKNOWLEDGED", actor);
-}
-
-export async function dismissIncident(incident: Incident, actor = "operator-w") {
-  await patchIncidentStatus(incident, "DISMISSED", actor, { reason: "false_positive" });
-}
-
-export async function resolveIncident(incident: Incident, actor = "operator-w") {
-  await patchIncidentStatus(incident, "CLOSED", actor);
-}
-
-export async function escalateIncident(
-  incident: Incident,
-  authorities: string[],
-  actor = "operator-w",
-) {
-  await patchIncidentStatus(incident, "DISPATCHED", actor, {
-    escalated: true,
-    authorities,
-    sendai_packet: true,
-  });
-}
-
-export async function addOperatorNote(incidentId: string, text: string, actor = "operator-w") {
-  const db = getDb();
-  const eventsCol = collection(db, "incidents", incidentId, "events");
-  const eventId = `note-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-  await setDoc(doc(eventsCol, eventId), {
-    event_id: eventId,
-    event_time: new Date().toISOString(),
-    venue_id: "taj-ahmedabad",
-    incident_id: incidentId,
-    to_status: "NOTE",
-    actor_type: "operator",
-    actor_id: actor,
-    payload: { note: text },
-    created_at: serverTimestamp(),
-  });
-}
-
-// ── Dispatch API calls ────────────────────────────────────────────────────
-export type DispatchAction = "ack" | "enroute" | "arrived" | "handoff" | "decline";
-
-export async function callDispatch(dispatchId: string, action: DispatchAction): Promise<void> {
-  const res = await fetch(`${DISPATCH_BASE}/v1/dispatches/${dispatchId}/${action}`, {
-    method: "POST",
-  });
-  if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(`dispatch ${action} failed: ${res.status} ${txt}`);
-  }
-}
-
-export interface PageRequest {
-  incident_id: string;
-  venue_id: string;
-  responder_id: string;
-  role: string;
-  severity: Severity;
-  category: string;
-  zone_id: string;
-  rationale: string;
-}
-
-export async function pageResponder(req: PageRequest): Promise<{ dispatch_id: string }> {
-  const res = await fetch(`${DISPATCH_BASE}/v1/dispatches`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...req, fcm_tokens: [] }),
-  });
-  if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(`page responder failed: ${res.status} ${txt}`);
-  }
-  return (await res.json()) as { dispatch_id: string };
-}
-
-// ── Health checks ─────────────────────────────────────────────────────────
+// ── Health checks ───────────────────────────────────────────────────────────
 export async function checkHealth(svc: ServiceName, signal?: AbortSignal): Promise<boolean> {
   try {
     const res = await fetch(`${SERVICE_BASES[svc]}/health`, { signal, cache: "no-store" });
@@ -173,7 +101,7 @@ export const SERVICE_PORTS: Record<ServiceName, number> = {
   dispatch: 8004,
 };
 
-// ── Drill: full pipeline ──────────────────────────────────────────────────
+// ── Drill: full pipeline ───────────────────────────────────────────────────
 export interface DrillStep {
   label: string;
   status: "pending" | "running" | "ok" | "error";
