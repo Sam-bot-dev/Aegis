@@ -25,19 +25,24 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from aegis_shared import get_settings, setup_logging
-from aegis_shared.agent import DispatcherAgent
-from aegis_shared.audit import write_audit
 from aegis_shared.errors import AegisError
+from aegis_shared.firestore import (
+    append_incident_event,
+    get_responders_for_venue,
+    upsert_dispatch,
+    upsert_incident,
+)
 from aegis_shared.logger import get_logger
 from aegis_shared.pubsub import publish_json
 from aegis_shared.schemas import (
     Dispatch,
-    DispatcherRoster,
-    Incident,
+    DispatchEvent,
+    DispatchStatus,
+    IncidentEvent,
     IncidentStatus,
     PerceptualSignal,
     PubSubEnvelope,
-    Severity,
+    ResponderSkill,
     new_id,
 )
 from aegis_shared.security import apply_security_middleware
