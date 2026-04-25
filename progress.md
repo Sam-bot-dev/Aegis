@@ -3,7 +3,7 @@
 
 > **Single source of truth for build state.** Every entry below was verified by reading the actual file.
 > Any codex or developer building this project should read this file first, then the blueprint.
-> Last full audit: **2026-04-24**
+> Last full audit: **2026-04-25**
 
 ---
 
@@ -444,6 +444,7 @@ Priority labels match blueprint §7: **(P0)** must ship Phase 1 · **(P1)** Prod
 - [x] Typed exception hierarchy — every error has http_status + audit_category
 - [x] Soft-fail pattern on every external dep — services degrade gracefully without creds
 - [x] Tenacity retry with exponential backoff on Gemini calls
+- [x] Standardized CORS middleware + manual headers in all exception handlers (ensures visibility of server errors in browser)
 - [x] asyncio.Lock for audit hash chain monotonicity under concurrency
 - [x] Ordering keys on all Pub/Sub publishes (disabled on emulator, not silently broken)
 - [x] Type hints throughout Python (full annotations; `from __future__ import annotations`)
@@ -607,3 +608,14 @@ Known remaining gaps (deliberate — Phase 2): see Appendix C of DEPLOY.md.
 - New gap discovered → add under the relevant section with `[ ]`.
 - Never mark `[x]` unless you have personally verified the code runs end-to-end.
 - After any major new build, re-read the corresponding blueprint section (§7 features, §11 architecture, §82 testing) to catch newly applicable items.
+
+---
+
+## New since last audit (2026-04-25 — session 3)
+
+**Hardened CORS and stability for production.**
+
+- [x] **CORS Safety-Net** — Manual `Access-Control-Allow-Origin: *` headers added to every `@app.exception_handler` in `ingest`, `vision`, `orchestrator`, and `dispatch`. Fixes the "missing header on 500/422" browser error.
+- [x] **Linting & Quality** — `Makefile` targets (`lint`, `fmt`) expanded to cover root and all subpackages. `ruff` verified clean across 35+ files. `agents/dispatcher/agent.py` refactored to pass branch/statement limits.
+- [x] **GitHub Synchronization** — All recent hardening, refactoring, and build-script updates (`pack-ui.ps1`, `aegis-ui-web-0.1.0.tgz`) pushed to `main`.
+- [x] **Git Ignore** — Added `*.tgz` to `.gitignore` to keep the repo clean while allowing the local `npm pack` workflow.
