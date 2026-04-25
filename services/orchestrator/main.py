@@ -29,6 +29,7 @@ from aegis_shared.errors import AegisError
 from aegis_shared.firestore import (
     append_incident_event,
     get_responders_for_venue,
+    get_incident,
     upsert_dispatch,
     upsert_incident,
 )
@@ -46,7 +47,8 @@ from aegis_shared.schemas import (
     new_id,
 )
 from aegis_shared.security import apply_security_middleware
-from fastapi import FastAPI, HTTPException, Request
+from aegis_shared.auth import verify_request
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
@@ -366,6 +368,43 @@ async def handle_batch(req: HandleBatchRequest) -> HandleResponse:
     )
 
     return HandleResponse(result=result, dispatched=dispatched, reasoning=reasoning)
+
+
+# ---- Frontend API: incident events (authenticated) ----
+
+
+class IncidentEventRequest(BaseModel):
+    event_type: str
+    actor_type: str = "operator"
+    actor_id: str = "operator-w"
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+@app.post("/v1/incidents/{incident_id}/events")
+async def add_incident_event(
+    incident_id: str,
+    req: IncidentEventRequest,
+    principal: dict = Depends(verify_request),
+) -> dict[str, str]:
+    """Append an incident event (e.g., operator note) on behalf of authenticated user.
+
+    Requires Firebase Auth. The frontend should call this instead of writing
+    directly to Firestore.
+    """
+    # Verify user is signed in
+    if principal.get("uid") in ("anonymous", ""):
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    event = IncidentEvent(
+        venue_id=req.payload.get("venue_id", ""),
+        incident_id=incident_id,
+        event_type=req.event_type,
+        actor_type=req.actor_type,
+        actor_id=req.actor_id,
+        payload=req.payload,
+    )
+    await append_incident_event(incident_id, event)
+    return {"ok": "true"}
 
 
 # ---- Pub/Sub push subscriber ----

@@ -1,6 +1,6 @@
 "use client";
 
-import { getDb, type Incident, type IncidentStatus, type Severity } from "@aegis/ui-web";
+import { getDb, getFirebaseAuth, type Incident, type IncidentStatus, type Severity } from "@aegis/ui-web";
 import {
   collection,
   doc,
@@ -21,9 +21,21 @@ const SERVICE_BASES = {
 } as const;
 export type ServiceName = keyof typeof SERVICE_BASES;
 
+/**
+ * Returns the signed-in user's Firebase UID.
+ * For the staff app this uid is what Firestore rules check against
+ * (bridged to responder_id via /users/{uid}.responder_id).
+ */
+function getActorUid(): string {
+  const uid = getFirebaseAuth().currentUser?.uid;
+  if (!uid) throw new Error("Not authenticated — please sign in.");
+  return uid;
+}
+
 // ── Firestore helpers ─────────────────────────────────────────────────────
 async function appendIncidentEvent(
   incidentId: string,
+  venueId: string,
   toStatus: IncidentStatus,
   fromStatus: IncidentStatus | null,
   actorId: string,
@@ -35,7 +47,7 @@ async function appendIncidentEvent(
   await setDoc(doc(eventsCol, eventId), {
     event_id: eventId,
     event_time: new Date().toISOString(),
-    venue_id: "taj-ahmedabad",
+    venue_id: venueId,
     incident_id: incidentId,
     from_status: fromStatus,
     to_status: toStatus,
@@ -58,27 +70,37 @@ async function patchIncidentStatus(
     update.resolved_at = new Date().toISOString();
   }
   await setDoc(doc(db, "incidents", incident.incident_id), update, { merge: true });
-  await appendIncidentEvent(incident.incident_id, next, incident.status, actorId, payload);
+  await appendIncidentEvent(
+    incident.incident_id,
+    incident.venue_id,
+    next,
+    incident.status,
+    actorId,
+    payload,
+  );
 }
 
 // ── Incident state mutations ──────────────────────────────────────────────
-export async function acknowledgeIncident(incident: Incident, actor = "operator-w") {
+export async function acknowledgeIncident(incident: Incident) {
+  const actor = getActorUid();
   await patchIncidentStatus(incident, "ACKNOWLEDGED", actor);
 }
 
-export async function dismissIncident(incident: Incident, actor = "operator-w") {
+export async function dismissIncident(incident: Incident) {
+  const actor = getActorUid();
   await patchIncidentStatus(incident, "DISMISSED", actor, { reason: "false_positive" });
 }
 
-export async function resolveIncident(incident: Incident, actor = "operator-w") {
+export async function resolveIncident(incident: Incident) {
+  const actor = getActorUid();
   await patchIncidentStatus(incident, "CLOSED", actor);
 }
 
 export async function escalateIncident(
   incident: Incident,
   authorities: string[],
-  actor = "operator-w",
 ) {
+  const actor = getActorUid();
   await patchIncidentStatus(incident, "DISPATCHED", actor, {
     escalated: true,
     authorities,
@@ -86,14 +108,15 @@ export async function escalateIncident(
   });
 }
 
-export async function addOperatorNote(incidentId: string, text: string, actor = "operator-w") {
+export async function addOperatorNote(incidentId: string, venueId: string, text: string) {
+  const actor = getActorUid();
   const db = getDb();
   const eventsCol = collection(db, "incidents", incidentId, "events");
   const eventId = `note-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   await setDoc(doc(eventsCol, eventId), {
     event_id: eventId,
     event_time: new Date().toISOString(),
-    venue_id: "taj-ahmedabad",
+    venue_id: venueId,
     incident_id: incidentId,
     to_status: "NOTE",
     actor_type: "operator",

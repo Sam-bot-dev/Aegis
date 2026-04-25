@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { getDb, type Incident, type IncidentStatus, type Severity } from "@aegis/ui-web";
+import { getDb, getFirebaseAuth, type Incident, type IncidentStatus, type Severity } from "@aegis/ui-web";
 import {
   collection,
   onSnapshot,
@@ -25,6 +25,13 @@ const SERVICE_BASES = {
   dispatch: DISPATCH_BASE,
 } as const;
 export type ServiceName = keyof typeof SERVICE_BASES;
+
+/** Returns the signed-in operator's Firebase UID, or throws if not authenticated. */
+function getActorUid(): string {
+  const uid = getFirebaseAuth().currentUser?.uid;
+  if (!uid) throw new Error("Not authenticated — please sign in.");
+  return uid;
+}
 
 // ── Firestore queries (read-only) ─────────────────────────────────────────
 export function useIncidents(venueId: string, statusFilter?: string) {
@@ -68,9 +75,12 @@ export function useIncidents(venueId: string, statusFilter?: string) {
 // The backend services update incidents via Admin SDK.
 
 // ── Incident state mutation APIs ───────────────────────────────────────────
-export async function acknowledgeIncident(incident: Incident, actor = "operator-w") {
+export async function acknowledgeIncident(incident: Incident) {
+  const actor = getActorUid();
   const res = await fetch(`${DISPATCH_BASE}/v1/dispatches/${incident.incident_id}/ack`, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ actor_id: actor }),
   });
   if (!res.ok) {
     const txt = await res.text().catch(() => "");
@@ -78,7 +88,8 @@ export async function acknowledgeIncident(incident: Incident, actor = "operator-
   }
 }
 
-export async function dismissIncident(incident: Incident, actor = "operator-w") {
+export async function dismissIncident(incident: Incident) {
+  const actor = getActorUid();
   const res = await fetch(`${DISPATCH_BASE}/v1/dispatches/${incident.incident_id}/status`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -90,7 +101,8 @@ export async function dismissIncident(incident: Incident, actor = "operator-w") 
   }
 }
 
-export async function resolveIncident(incident: Incident, actor = "operator-w") {
+export async function resolveIncident(incident: Incident) {
+  const actor = getActorUid();
   const res = await fetch(`${DISPATCH_BASE}/v1/dispatches/${incident.incident_id}/status`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -105,8 +117,8 @@ export async function resolveIncident(incident: Incident, actor = "operator-w") 
 export async function escalateIncident(
   incident: Incident,
   authorities: string[],
-  actor = "operator-w",
 ) {
+  const actor = getActorUid();
   const res = await fetch(`${DISPATCH_BASE}/v1/dispatches/${incident.incident_id}/status`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -124,7 +136,8 @@ export async function escalateIncident(
   }
 }
 
-export async function addOperatorNote(incidentId: string, text: string, actor = "operator-w") {
+export async function addOperatorNote(incidentId: string, text: string) {
+  const actor = getActorUid();
   const res = await fetch(`${ORCH_BASE}/v1/incidents/${incidentId}/events`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
