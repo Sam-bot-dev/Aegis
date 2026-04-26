@@ -45,7 +45,15 @@
       "Bash(git *)",
       "Bash(python -m ruff check services/dispatch/main.py services/orchestrator/main.py)",
       "Bash(python -m ruff format services/orchestrator/main.py services/shared/aegis_shared/firestore.py)",
-      "Bash(gh run *)"
+      "Bash(gh run *)",
+      "Bash(python -m pytest services/shared/tests/test_shared.py -x -q)",
+      "Bash(python -m pytest --cov=services --cov-report=term-missing -q)",
+      "Bash(python -m ruff check --fix services/shared/tests/test_shared.py)",
+      "Bash(python -m ruff format services/shared/tests/test_shared.py)",
+      "Bash(python -m ruff check services/shared/tests/test_shared.py)",
+      "Bash(python -m ruff format --check services/shared/tests/test_shared.py)",
+      "Bash(python -m pytest services/shared/tests/test_shared.py -q)",
+      "Bash(xargs grep *)"
     ]
   },
   "enableAllProjectMcpServers": true,
