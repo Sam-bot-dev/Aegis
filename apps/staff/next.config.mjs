@@ -20,12 +20,15 @@ const securityHeaders = [
     value: [
       "default-src 'self'",
       // Next.js inlines scripts; tighten to nonces in prod once you have a nonce strategy.
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      // apis.google.com required for Firebase Auth Google Sign-In (api.js).
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
       "font-src 'self' data:",
       `connect-src ${CSP_CONNECT_SRC}`,
       "worker-src 'self' blob:",
+      // accounts.google.com: OAuth popup; *.firebaseapp.com: Firebase Auth session iframe.
+      "frame-src https://accounts.google.com https://*.firebaseapp.com",
       "frame-ancestors 'none'",
     ].join("; "),
   },
