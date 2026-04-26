@@ -1,0 +1,16 @@
+title = "Aegis gitleaks configuration"
+
+[extend]
+useDefault = true
+
+# Firebase Web SDK API keys (AIzaSy... prefix) are PUBLIC by design.
+# Google embeds them in every browser bundle; they are protected by Firebase
+# Security Rules and authorized-domain restrictions, not by secrecy.
+# See: https://firebase.google.com/docs/projects/api-keys
+# Scope: only apphosting.yaml (NEXT_PUBLIC_FIREBASE_API_KEY var) is allowed.
+# All other GCP API key detections remain enforced.
+[[allowlists]]
+description = "Firebase Web SDK API key in App Hosting config (public by design)"
+regexTarget = "secret"
+regex = '''AIzaSy[A-Za-z0-9_\-]+'''
+paths = ['''apphosting\.yaml$''']
