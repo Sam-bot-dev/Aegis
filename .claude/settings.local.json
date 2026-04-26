@@ -27,7 +27,22 @@
       "Bash(rm -rf node_modules package-lock.json)",
       "Bash(npm cache *)",
       "Bash(python -c \"import json; json.load\\(open\\('firebase/firestore.indexes.json'\\)\\); json.load\\(open\\('firebase.json'\\)\\); json.load\\(open\\('.firebaserc'\\)\\); print\\('all JSON parses OK'\\)\")",
-      "mcp__code-review-graph__detect_changes_tool"
+      "mcp__code-review-graph__detect_changes_tool",
+      "Bash(npx tsc *)",
+      "Bash(node_modules/.bin/tsc --noEmit -p apps/dashboard/tsconfig.json)",
+      "Bash(node ../../node_modules/typescript/bin/tsc --noEmit)",
+      "Bash(node node_modules/typescript/bin/tsc --noEmit)",
+      "Bash(node /c/Users/mekha/AegisLocal/apps/dashboard/node_modules/typescript/bin/tsc --noEmit -p /c/Users/mekha/AegisLocal/apps/dashboard/tsconfig.json)",
+      "Bash(node node_modules/typescript/bin/tsc)",
+      "Bash(npm pack *)",
+      "Bash(grep -v \"^$\")",
+      "Bash(node *)",
+      "Bash(export TARBALL=\"/c/Users/mekha/AegisLocal/packages/ui-web/aegis-ui-web-0.1.0.tgz\")",
+      "Bash(python3 *)",
+      "Bash(openssl dgst *)",
+      "Bash(openssl base64 *)",
+      "Bash(git -C /c/Users/mekha/AegisLocal status --short)",
+      "Bash(git *)"
     ]
   },
   "enableAllProjectMcpServers": true,
