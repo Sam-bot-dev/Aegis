@@ -23,19 +23,16 @@ env:
     value: aegis-gsc-2026.firebaseapp.com
     availability: [BUILD, RUNTIME]
   - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-    value: aegis-gsc-2026.appspot.com
+    value: aegis-gsc-2026.firebasestorage.app
     availability: [BUILD, RUNTIME]
-  # TODO: paste real values from Firebase Console once the web app is registered.
-  # The build will succeed with placeholders, but Firestore listeners will throw
-  # "auth/invalid-api-key" until these are populated.
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY
-    value: REPLACE_WITH_FIREBASE_WEB_API_KEY
+    value: AIzaSyCjlHAZNF-3loRqk36OAFJD40GApqKrduQ
     availability: [BUILD, RUNTIME]
   - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
-    value: REPLACE_WITH_MESSAGING_SENDER_ID
+    value: "374730878399"
     availability: [BUILD, RUNTIME]
   - variable: NEXT_PUBLIC_FIREBASE_APP_ID
-    value: REPLACE_WITH_FIREBASE_APP_ID
+    value: 1:374730878399:web:e1a4fe5e1763b9e94b850a
     availability: [BUILD, RUNTIME]
 
   # ---- Demo defaults ----
