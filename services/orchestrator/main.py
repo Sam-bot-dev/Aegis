@@ -22,7 +22,7 @@ import base64
 import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Annotated, Any
 
 from aegis_shared import get_settings, setup_logging
 from aegis_shared.auth import Principal, verify_request
@@ -61,6 +61,8 @@ from agents.orchestrator.agent import (
     OrchestratorInput,
     OrchestratorOutput,
 )
+
+_Authed = Annotated[Principal, Security(verify_request)]
 
 
 @asynccontextmanager
@@ -459,7 +461,7 @@ class IncidentEventRequest(BaseModel):
 async def add_incident_event(
     incident_id: str,
     req: IncidentEventRequest,
-    principal: Principal = Security(verify_request),
+    principal: _Authed,
 ) -> dict[str, str]:
     """Append an incident event (e.g., operator note) on behalf of authenticated user.
 
@@ -483,7 +485,7 @@ async def add_incident_event(
 @app.post("/v1/incidents/{incident_id}/approve-dispatch")
 async def approve_dispatch(
     incident_id: str,
-    principal: Principal = Security(verify_request),
+    principal: _Authed,
 ) -> dict[str, str]:
     """Operator approves dispatch for an S1 HITL-gated incident.
 
