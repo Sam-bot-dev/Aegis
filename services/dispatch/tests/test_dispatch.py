@@ -35,10 +35,8 @@ def app_module():
 def _patch_side_effects(app_module):
     """Silence Firestore + audit writes during tests."""
     with (
-        patch.object(app_module, "upsert_dispatch", new=AsyncMock()),
         patch.object(app_module, "write_audit", new=AsyncMock()),
         patch.object(app_module, "update_incident_status", new=AsyncMock()),
-        patch.object(app_module, "get_dispatch_by_id", new=AsyncMock(return_value=None)),
         patch.object(app_module, "send_to_tokens", return_value=[]),
     ):
         yield
@@ -134,26 +132,24 @@ def test_get_unknown_returns_404(client: TestClient) -> None:
 
 
 def test_get_dispatch_falls_back_to_firestore(client: TestClient, app_module) -> None:
-    persisted = {
+    # Populate memory store directly (simulating a persisted dispatch)
+    app_module.app.state.memory_store["DSP-persisted"] = {
         "dispatch_id": "DSP-persisted",
         "incident_id": "INC-9",
         "venue_id": "taj-ahmedabad",
         "responder_id": "RSP-kavya",
         "role": "Doctor",
         "status": "ARRIVED",
+        "last_updated_at": "2026-04-24T00:01:00+00:00",
         "paged_at": "2026-04-24T00:00:00+00:00",
-        "arrived_at": "2026-04-24T00:01:00+00:00",
-        "notes": "Medical team reached scene.",
     }
-    with patch.object(app_module, "get_dispatch_by_id", new=AsyncMock(return_value=persisted)):
-        resp = client.get("/v1/dispatches/DSP-persisted")
+    resp = client.get("/v1/dispatches/DSP-persisted")
 
     assert resp.status_code == 200
     body = resp.json()
     assert body["status"] == "ARRIVED"
     assert body["incident_id"] == "INC-9"
     assert body["responder_id"] == "RSP-kavya"
-
 
 def test_create_dispatch_emits_fcm(client: TestClient, app_module) -> None:
     payload = {

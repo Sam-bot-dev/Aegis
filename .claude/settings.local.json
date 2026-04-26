@@ -42,7 +42,10 @@
       "Bash(openssl dgst *)",
       "Bash(openssl base64 *)",
       "Bash(git -C /c/Users/mekha/AegisLocal status --short)",
-      "Bash(git *)"
+      "Bash(git *)",
+      "Bash(python -m ruff check services/dispatch/main.py services/orchestrator/main.py)",
+      "Bash(python -m ruff format services/orchestrator/main.py services/shared/aegis_shared/firestore.py)",
+      "Bash(gh run *)"
     ]
   },
   "enableAllProjectMcpServers": true,

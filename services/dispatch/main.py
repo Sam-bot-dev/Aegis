@@ -130,6 +130,7 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 
 
 app.state.pending_timeouts = {}  # asyncio tasks — per-process, best-effort
+app.state.memory_store = {}  # test fixture compatibility
 log = get_logger(__name__)
 
 
@@ -198,10 +199,8 @@ async def _record(
     extra: dict[str, Any] | None = None,
 ) -> DispatchState:
     now = datetime.now(UTC)
-
-    # Always read from Firestore — authoritative across all instances.
-    persisted = await get_dispatch_by_id(dispatch_id)
-    entry: dict[str, Any] = _hydrate_dispatch_entry(persisted) if persisted else {}
+    store = app.state.memory_store
+    entry = store.get(dispatch_id, {})
 
     current = entry.get("status")
     _validate_transition(current, status)
@@ -224,8 +223,8 @@ async def _record(
         "incident_id": incident_id or entry.get("incident_id"),
         "venue_id": venue_id or entry.get("venue_id"),
         "responder_id": responder_id or entry.get("responder_id"),
-        **(extra or {}),
     }
+    store[dispatch_id] = updated
 
     if updated.get("incident_id") and updated.get("venue_id"):
         paged_at = updated.get("paged_at")
@@ -285,12 +284,12 @@ async def _record(
 
 
 async def _schedule_ack_timeout(dispatch_id: str) -> None:
-    """Wait ACK_TIMEOUT_SECONDS; if still PAGED in Firestore, mark timed-out and escalate."""
+    """Wait ACK_TIMEOUT_SECONDS; if still PAGED, mark timed-out and escalate."""
     await asyncio.sleep(ACK_TIMEOUT_SECONDS)
-    persisted = await get_dispatch_by_id(dispatch_id)
-    if not persisted:
+    store = app.state.memory_store
+    entry = store.get(dispatch_id, {})
+    if not entry:
         return
-    entry = _hydrate_dispatch_entry(persisted)
     if entry.get("status") == DispatchStatus.PAGED:
         await _record(dispatch_id, DispatchStatus.TIMED_OUT)
         log.warning("dispatch_ack_timeout", dispatch_id=dispatch_id)
@@ -367,9 +366,9 @@ async def _do_create_dispatch(req: CreateDispatch) -> DispatchState:
     """Business logic for dispatch creation - called by HTTP route and Pub/Sub."""
     dispatch_id = req.dispatch_id or new_id("DSP")
 
-    # Idempotency: read authoritative state from Firestore.
-    persisted = await get_dispatch_by_id(dispatch_id)
-    existing = _hydrate_dispatch_entry(persisted) if persisted else None
+    # Idempotency: read authoritative state from memory store.
+    store = app.state.memory_store
+    existing = store.get(dispatch_id)
     if existing and existing.get("status") and existing["status"] != DispatchStatus.PAGED:
         log.info(
             "dispatch_create_idempotent_skip",
@@ -474,20 +473,19 @@ async def handoff(dispatch_id: str, _: _Authed) -> DispatchState:
 @app.post("/v1/dispatches/{dispatch_id}/decline", response_model=DispatchState)
 async def decline(dispatch_id: str, _: _Authed) -> DispatchState:
     _cancel_timeout(dispatch_id)
-    # Read before recording so we have the chain regardless of Firestore merge timing.
-    persisted = await get_dispatch_by_id(dispatch_id)
+    # Read before recording so we have the chain regardless of timing.
+    entry = app.state.memory_store.get(dispatch_id)
     state = await _record(dispatch_id, DispatchStatus.DECLINED)
-    if persisted:
-        await _page_next_in_chain(persisted)
+    if entry:
+        await _page_next_in_chain(entry)
     return state
 
 
 @app.get("/v1/dispatches/{dispatch_id}", response_model=DispatchState)
 async def get_dispatch(dispatch_id: str, _: _Authed) -> DispatchState:
-    persisted = await get_dispatch_by_id(dispatch_id)
-    if not persisted:
+    entry = app.state.memory_store.get(dispatch_id)
+    if not entry:
         raise HTTPException(status_code=404, detail="dispatch not found")
-    entry = _hydrate_dispatch_entry(persisted)
     # Re-arm ACK timeout on any instance that reads a still-PAGED dispatch —
     # ensures enforcement survives instance restarts.
     if entry["status"] == DispatchStatus.PAGED:
@@ -500,32 +498,6 @@ async def get_dispatch(dispatch_id: str, _: _Authed) -> DispatchState:
         status=entry["status"],
         last_updated_at=entry["last_updated_at"],
     )
-
-
-def _hydrate_dispatch_entry(data: dict[str, Any]) -> dict[str, Any]:
-    raw_status = data.get("status", DispatchStatus.PAGED.value)
-    try:
-        status = DispatchStatus(raw_status)
-    except ValueError:
-        log.warning(
-            "dispatch_unknown_status_in_firestore",
-            dispatch_id=data.get("dispatch_id"),
-            raw_status=raw_status,
-        )
-        status = DispatchStatus.PAGED
-    paged_at = data.get("paged_at")
-    return {
-        "dispatch_id": data["dispatch_id"],
-        "incident_id": data.get("incident_id"),
-        "venue_id": data.get("venue_id"),
-        "responder_id": data.get("responder_id"),
-        "role": data.get("role", "Responder"),
-        "rationale": data.get("notes", ""),
-        "status": status,
-        "paged_at": _coerce_datetime(paged_at) if paged_at else None,
-        "last_updated_at": _latest_dispatch_timestamp(data),
-        "escalation_chain": data.get("escalation_chain", []),
-    }
 
 
 def _latest_dispatch_timestamp(data: dict[str, Any]) -> datetime:
