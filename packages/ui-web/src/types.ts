@@ -26,7 +26,8 @@ export type IncidentStatus =
   | "RESOLVING"
   | "VERIFIED"
   | "CLOSED"
-  | "DISMISSED";
+  | "DISMISSED"
+  | "NOTE";
 
 export type DispatchStatus =
   | "PAGED"
@@ -87,7 +88,7 @@ export interface IncidentEvent {
   incident_id: string;
   from_status?: IncidentStatus | null;
   to_status: IncidentStatus;
-  actor_type: string;
+  actor_type: "agent" | "human" | "system";
   actor_id: string;
   payload: Record<string, unknown>;
 }
@@ -112,6 +113,7 @@ export const STATUS_COLOR: Record<IncidentStatus, string> = {
   VERIFIED: "#10B981",
   CLOSED: "#64748B",
   DISMISSED: "#64748B",
+  NOTE: "#8B5CF6",
 };
 
 export const DISPATCH_STATUS_COLOR: Record<DispatchStatus, string> = {

@@ -374,9 +374,8 @@ async def handle_batch(req: HandleBatchRequest) -> HandleResponse:
 
 
 class IncidentEventRequest(BaseModel):
-    event_type: str
-    actor_type: str = "operator"
-    actor_id: str = "operator-w"
+    to_status: IncidentStatus
+    actor_type: str = "human"
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -388,19 +387,18 @@ async def add_incident_event(
 ) -> dict[str, str]:
     """Append an incident event (e.g., operator note) on behalf of authenticated user.
 
-    Requires Firebase Auth. The frontend should call this instead of writing
-    directly to Firestore.
+    Requires Firebase Auth. actor_id is taken from the verified JWT, not the request body.
     """
-    # Verify user is signed in
-    if principal.get("uid") in ("anonymous", ""):
+    uid = principal.get("uid", "")
+    if uid in ("anonymous", ""):
         raise HTTPException(status_code=401, detail="Authentication required")
 
     event = IncidentEvent(
         venue_id=req.payload.get("venue_id", ""),
         incident_id=incident_id,
-        event_type=req.event_type,
+        to_status=req.to_status,
         actor_type=req.actor_type,
-        actor_id=req.actor_id,
+        actor_id=uid,
         payload=req.payload,
     )
     await append_incident_event(incident_id, event)

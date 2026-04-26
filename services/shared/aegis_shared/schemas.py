@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -54,11 +54,11 @@ class IncidentStatus(StrEnum):
     VERIFIED = "VERIFIED"
     CLOSED = "CLOSED"
     DISMISSED = "DISMISSED"
+    NOTE = "NOTE"  # operator annotation, not a status transition
 
 
 class SignalModality(StrEnum):
     VISION = "VISION"
-    AUDIO = "AUDIO"
     SENSOR = "SENSOR"
     PHONE = "PHONE"
     MANUAL = "MANUAL"
@@ -166,7 +166,7 @@ class IncidentEvent(BaseModel):
     incident_id: str
     from_status: IncidentStatus | None = None
     to_status: IncidentStatus
-    actor_type: str  # 'agent' | 'human' | 'system'
+    actor_type: Literal["agent", "human", "system"]
     actor_id: str
     payload: dict[str, object] = Field(default_factory=dict)
 
@@ -252,7 +252,7 @@ class AuditEvent(BaseModel):
     event_time: datetime = Field(default_factory=utc_now)
     venue_id: str
     incident_id: str | None = None
-    actor_type: str
+    actor_type: Literal["agent", "human", "system"]
     actor_id: str
     action: str
     input_hash: str | None = None

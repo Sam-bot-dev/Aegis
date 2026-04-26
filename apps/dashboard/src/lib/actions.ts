@@ -137,14 +137,12 @@ export async function escalateIncident(
 }
 
 export async function addOperatorNote(incidentId: string, text: string) {
-  const actor = getActorUid();
   const res = await fetch(`${ORCH_BASE}/v1/incidents/${incidentId}/events`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      event_type: "NOTE",
-      actor_type: "operator",
-      actor_id: actor,
+      to_status: "NOTE",
+      actor_type: "human",
       payload: { note: text },
     }),
   });

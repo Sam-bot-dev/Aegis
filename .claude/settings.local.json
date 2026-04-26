@@ -26,7 +26,8 @@
       "Bash(npm run *)",
       "Bash(rm -rf node_modules package-lock.json)",
       "Bash(npm cache *)",
-      "Bash(python -c \"import json; json.load\\(open\\('firebase/firestore.indexes.json'\\)\\); json.load\\(open\\('firebase.json'\\)\\); json.load\\(open\\('.firebaserc'\\)\\); print\\('all JSON parses OK'\\)\")"
+      "Bash(python -c \"import json; json.load\\(open\\('firebase/firestore.indexes.json'\\)\\); json.load\\(open\\('firebase.json'\\)\\); json.load\\(open\\('.firebaserc'\\)\\); print\\('all JSON parses OK'\\)\")",
+      "mcp__code-review-graph__detect_changes_tool"
     ]
   },
   "enableAllProjectMcpServers": true,
