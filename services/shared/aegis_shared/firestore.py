@@ -181,8 +181,8 @@ async def get_dispatch_by_id(dispatch_id: str) -> dict[str, Any] | None:
     except Exception as exc:
         log.warning("firestore_dispatch_fetch_failed", dispatch_id=dispatch_id, error=str(exc))
         return None
- 
- 
+
+
 async def get_incident(incident_id: str) -> dict[str, Any] | None:
     """Return an incident document by ID."""
     client = _client_or_none()
@@ -215,7 +215,7 @@ async def get_active_incident(
     Returns None if Firestore is unavailable — callers fall back to creating
     a new incident.
     """
-    from datetime import timedelta
+    from datetime import UTC, datetime, timedelta
 
     client = _client_or_none()
     if client is None:
@@ -248,7 +248,12 @@ async def get_active_incident(
 
         return None
     except Exception as exc:
-        log.warning("firestore_active_incident_lookup_failed", venue_id=venue_id, zone_id=zone_id, error=str(exc))
+        log.warning(
+            "firestore_active_incident_lookup_failed",
+            venue_id=venue_id,
+            zone_id=zone_id,
+            error=str(exc),
+        )
         return None
 
 

@@ -30,6 +30,7 @@ from typing import Any
 
 from aegis_shared import setup_logging
 from aegis_shared.audit import write_audit
+from aegis_shared.auth import Principal, verify_request
 from aegis_shared.errors import AegisError
 from aegis_shared.fcm import send_to_tokens
 from aegis_shared.firestore import (
@@ -47,9 +48,8 @@ from aegis_shared.schemas import (
     PubSubEnvelope,
     new_id,
 )
-from aegis_shared.auth import Principal, verify_request
 from aegis_shared.security import apply_security_middleware
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Security
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -362,7 +362,7 @@ async def _page_next_in_chain(dispatch_doc: dict[str, Any]) -> None:
 
 
 async def _do_create_dispatch(req: CreateDispatch) -> DispatchState:
-    """Business logic for dispatch creation — called by the HTTP route and the Pub/Sub subscriber."""
+    """Business logic for dispatch creation - called by HTTP route and Pub/Sub."""
     dispatch_id = req.dispatch_id or new_id("DSP")
 
     # Idempotency: read authoritative state from Firestore.
@@ -434,26 +434,26 @@ async def _do_create_dispatch(req: CreateDispatch) -> DispatchState:
 @app.post("/v1/dispatches", response_model=DispatchState)
 async def create_dispatch(
     req: CreateDispatch,
-    _: Principal = Depends(verify_request),
+    _: Principal = Security(verify_request),
 ) -> DispatchState:
     """Create a dispatch and send push. Authenticated; idempotent under at-least-once delivery."""
     return await _do_create_dispatch(req)
 
 
 @app.post("/v1/dispatches/{dispatch_id}/ack", response_model=DispatchState)
-async def ack(dispatch_id: str, _: Principal = Depends(verify_request)) -> DispatchState:
+async def ack(dispatch_id: str, _: Principal = Security(verify_request)) -> DispatchState:
     _cancel_timeout(dispatch_id)
     return await _record(dispatch_id, DispatchStatus.ACKNOWLEDGED)
 
 
 @app.post("/v1/dispatches/{dispatch_id}/enroute", response_model=DispatchState)
-async def enroute(dispatch_id: str, _: Principal = Depends(verify_request)) -> DispatchState:
+async def enroute(dispatch_id: str, _: Principal = Security(verify_request)) -> DispatchState:
     _cancel_timeout(dispatch_id)
     return await _record(dispatch_id, DispatchStatus.EN_ROUTE)
 
 
 @app.post("/v1/dispatches/{dispatch_id}/arrived", response_model=DispatchState)
-async def arrived(dispatch_id: str, _: Principal = Depends(verify_request)) -> DispatchState:
+async def arrived(dispatch_id: str, _: Principal = Security(verify_request)) -> DispatchState:
     _cancel_timeout(dispatch_id)
     state = await _record(dispatch_id, DispatchStatus.ARRIVED)
     if state.incident_id:
@@ -464,13 +464,13 @@ async def arrived(dispatch_id: str, _: Principal = Depends(verify_request)) -> D
 
 
 @app.post("/v1/dispatches/{dispatch_id}/handoff", response_model=DispatchState)
-async def handoff(dispatch_id: str, _: Principal = Depends(verify_request)) -> DispatchState:
+async def handoff(dispatch_id: str, _: Principal = Security(verify_request)) -> DispatchState:
     _cancel_timeout(dispatch_id)
     return await _record(dispatch_id, DispatchStatus.HANDED_OFF)
 
 
 @app.post("/v1/dispatches/{dispatch_id}/decline", response_model=DispatchState)
-async def decline(dispatch_id: str, _: Principal = Depends(verify_request)) -> DispatchState:
+async def decline(dispatch_id: str, _: Principal = Security(verify_request)) -> DispatchState:
     _cancel_timeout(dispatch_id)
     # Read before recording so we have the chain regardless of Firestore merge timing.
     persisted = await get_dispatch_by_id(dispatch_id)
@@ -481,7 +481,7 @@ async def decline(dispatch_id: str, _: Principal = Depends(verify_request)) -> D
 
 
 @app.get("/v1/dispatches/{dispatch_id}", response_model=DispatchState)
-async def get_dispatch(dispatch_id: str, _: Principal = Depends(verify_request)) -> DispatchState:
+async def get_dispatch(dispatch_id: str, _: Principal = Security(verify_request)) -> DispatchState:
     persisted = await get_dispatch_by_id(dispatch_id)
     if not persisted:
         raise HTTPException(status_code=404, detail="dispatch not found")

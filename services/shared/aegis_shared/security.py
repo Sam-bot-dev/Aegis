@@ -48,7 +48,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # cross-origin fetch the frontend makes.
         csp_directives = [
             "default-src 'self'",
-            "script-src 'self' 'unsafe-inline'",  # Next.js needs inline; tighten with nonces in prod
+            "script-src 'self' 'unsafe-inline'"  # Next.js inline, tighten with nonces
             "style-src 'self' 'unsafe-inline'",
             "img-src 'self' data: blob: https:",
             "font-src 'self' data:",

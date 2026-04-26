@@ -25,12 +25,13 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from aegis_shared import get_settings, setup_logging
+from aegis_shared.auth import Principal, verify_request
 from aegis_shared.errors import AegisError
 from aegis_shared.firestore import (
     append_incident_event,
     get_active_incident,
-    get_responders_for_venue,
     get_incident,
+    get_responders_for_venue,
     patch_incident_fields,
     upsert_dispatch,
     upsert_incident,
@@ -50,8 +51,7 @@ from aegis_shared.schemas import (
     new_id,
 )
 from aegis_shared.security import apply_security_middleware
-from aegis_shared.auth import Principal, verify_request
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Security
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
@@ -459,7 +459,7 @@ class IncidentEventRequest(BaseModel):
 async def add_incident_event(
     incident_id: str,
     req: IncidentEventRequest,
-    principal: Principal = Depends(verify_request),
+    principal: Principal = Security(verify_request),
 ) -> dict[str, str]:
     """Append an incident event (e.g., operator note) on behalf of authenticated user.
 
@@ -483,7 +483,7 @@ async def add_incident_event(
 @app.post("/v1/incidents/{incident_id}/approve-dispatch")
 async def approve_dispatch(
     incident_id: str,
-    principal: Principal = Depends(verify_request),
+    principal: Principal = Security(verify_request),
 ) -> dict[str, str]:
     """Operator approves dispatch for an S1 HITL-gated incident.
 
