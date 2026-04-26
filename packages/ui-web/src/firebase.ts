@@ -22,6 +22,13 @@ import {
   type Auth,
   type User,
 } from "firebase/auth";
+import {
+  getMessaging,
+  getToken,
+  onMessage,
+  type Messaging,
+  type MessagePayload,
+} from "firebase/messaging";
 
 export interface FirebaseConfig {
   apiKey: string;
@@ -133,4 +140,49 @@ export async function signInWithEmail(
 export async function doSignOut(): Promise<void> {
   const auth = getFirebaseAuth();
   await signOut(auth);
+}
+
+// ── Firebase Messaging ────────────────────────────────────────────────────
+
+let _messaging: Messaging | null = null;
+
+export function getFirebaseMessaging(): Messaging | null {
+  if (typeof window === "undefined") return null;
+  if (_messaging) return _messaging;
+  try {
+    _messaging = getMessaging(getFirebaseApp());
+    return _messaging;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Request push permission and return the FCM registration token.
+ * Returns null if permission denied, messaging unavailable, or no service worker.
+ */
+export async function requestNotificationToken(vapidKey: string): Promise<string | null> {
+  if (typeof window === "undefined" || !("Notification" in window)) return null;
+  const messaging = getFirebaseMessaging();
+  if (!messaging) return null;
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") return null;
+    const registration = await navigator.serviceWorker.ready;
+    return await getToken(messaging, { vapidKey, serviceWorkerRegistration: registration });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Subscribe to foreground FCM messages (app in focus).
+ * Returns an unsubscribe function.
+ */
+export function onForegroundMessage(
+  handler: (payload: MessagePayload) => void,
+): () => void {
+  const messaging = getFirebaseMessaging();
+  if (!messaging) return () => {};
+  return onMessage(messaging, handler);
 }
