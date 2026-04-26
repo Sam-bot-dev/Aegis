@@ -336,13 +336,7 @@ export default function ControlRoom() {
         {tab === "setup" ? <SetupTab /> : null}
         {tab === "analytics" ? <AnalyticsTab incidents={incidents} /> : null}
       </div>
-      {cameraOpen ? (
-        <CameraPanel
-          onClose={() => setCameraOpen(false)}
-          incidents={incidents}
-          openIncident={openIncident}
-        />
-      ) : null}
+      
     </div>
   );
 }
