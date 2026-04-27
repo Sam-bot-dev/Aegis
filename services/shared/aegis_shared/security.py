@@ -21,10 +21,17 @@ def apply_security_middleware(app: FastAPI) -> None:
     settings = get_settings()
 
     # 1. CORS — must be first to handle preflight properly
+    # Credentials require specific origins (no wildcards).
+    allow_creds = True
+    cors_origins = settings.cors_allowed_origins
+    # If origins are ["*"], we cannot use credentials. For production, set
+    # CORS_ALLOWED_ORIGINS to a JSON list of specific frontend URLs.
+    if cors_origins == ["*"] or "*" in cors_origins:
+        allow_creds = False
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_allowed_origins,
-        allow_credentials=False,  # Never allow credentials with wildcard origins
+        allow_origins=cors_origins,
+        allow_credentials=allow_creds,
         allow_methods=["GET", "POST", "OPTIONS", "PUT", "DELETE", "PATCH"],
         allow_headers=["*"],  # Allow all headers; tighten if needed
         expose_headers=["X-Request-ID"],  # For client-side debugging

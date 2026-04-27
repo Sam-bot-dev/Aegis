@@ -7,10 +7,10 @@ mis-configuration fails loudly at boot, never silently at request time.
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 Environment = Literal["local", "dev", "staging", "prod"]
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
@@ -80,13 +80,31 @@ class Settings(BaseSettings):
     service_internal_secret: str = Field(default="change-me")
     webhook_signing_key: str | None = Field(default=None)
     # CORS origins for the API.
-    # "*" is safe here because allow_credentials is always False (see security.py).
-    # In production you can tighten this by setting CORS_ALLOWED_ORIGINS as a
-    # JSON array in the environment, e.g.:
+    # Default is ["*"] (no credentials allowed). In production you can tighten
+    # this by setting CORS_ALLOWED_ORIGINS as a JSON array in the environment, e.g.:
     #   CORS_ALLOWED_ORIGINS='["https://aegis-staff.web.app","https://aegis-dashboard.web.app"]'
-    # FastAPI's CORSMiddleware does NOT support glob patterns such as *.hosted.app,
-    # so wildcard "*" is the correct default when App Hosting URLs are not yet known.
-    cors_allowed_origins: list[str] = Field(default=["*"])
+    # When specific origins are provided, credentials will be allowed automatically.
+    # FastAPI's CORSMiddleware does NOT support glob patterns such as *.hosted.app.
+    cors_allowed_origins: Annotated[list[str], NoDecode] = Field(default=["*"])
+
+    @field_validator("cors_allowed_origins", mode="before")
+    @classmethod
+    def _parse_cors_origins(cls, v: Any) -> list[str]:
+        if isinstance(v, list):
+            return v
+        if isinstance(v, str):
+            import json
+
+            s = v.strip()
+            if s.startswith("[") and s.endswith("]"):
+                try:
+                    parsed = json.loads(s)
+                    if isinstance(parsed, list):
+                        return parsed
+                except json.JSONDecodeError:
+                    pass
+            return [part.strip() for part in s.split(",") if part.strip()]
+        return ["*"]
 
     @property
     def is_local(self) -> bool:
